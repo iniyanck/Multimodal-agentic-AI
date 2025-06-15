@@ -3,12 +3,14 @@
 class FeedbackHandler:
     def __init__(self):
         """Initializes the feedback handler with an empty queue."""
+        from ..utils.logger import Logger
+        self.logger = Logger()
         self.feedback_queue = []
 
     def receive_feedback(self, feedback: str):
         """Receives feedback from an external source (e.g., user, system)."""
         self.feedback_queue.append(feedback)
-        print(f"Feedback received: {feedback}")
+        self.logger.info(f"Feedback received: {feedback}")
 
     def get_latest_feedback(self) -> str | None:
         """Retrieves and clears the latest feedback."""
@@ -28,7 +30,7 @@ class FeedbackHandler:
         This is where your agent's reasoning about feedback will go.
         For now, it's a placeholder.
         """
-        print(f"Processing feedback: '{feedback}' for agent state.")
+        self.logger.info(f"Processing feedback: '{feedback}' for agent state.")
         agent_state["last_feedback"] = feedback
         return agent_state
 

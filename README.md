@@ -63,30 +63,28 @@ The project is organized into logical modules:
     ```bash
     pip install -r requirements.txt
     ```
-    *(You will need to create a `requirements.txt` file if you don't have one. Based on the snippets, it should contain `google-generativeai`, `pyautogui`, `Pillow`, `sqlite3` (built-in), `json` (built-in), `os` (built-in), `sys` (built-in).)*
-    A suggested `requirements.txt` would look like:
-    ```
-    google-generativeai>=0.5.0 # Or the latest version you're using
-    pyautogui>=0.9.54
-    Pillow>=10.0.0
-    ```
 
-4.  **Google Gemini API Key:**
-    * Obtain a Google Gemini API key from the [Google AI Studio](https://aistudio.google.com/app/apikey).
-    * **Set it as an environment variable:**
-        * **Linux/macOS:**
-            ```bash
-            export GOOGLE_API_KEY="YOUR_GEMINI_API_KEY"
-            ```
-        * **Windows (Command Prompt):**
-            ```bash
-            set GOOGLE_API_KEY="YOUR_GEMINI_API_KEY"
-            ```
-        * **Windows (PowerShell):**
-            ```powershell
-            $env:GOOGLE_API_KEY="YOUR_GEMINI_API_KEY"
-            ```
-        * Alternatively, you can hardcode it directly in `main.py` for testing, but **this is not recommended for production environments.**
+4.  **Set up environment variables:**
+    - Copy `.env.example` to `.env` and add your API key:
+      ```bash
+      cp .env.example .env
+      # Then edit .env and set GOOGLE_API_KEY=your_gemini_api_key_here
+      ```
+    - Alternatively, you can set the environment variable manually:
+      * **Linux/macOS:**
+        ```bash
+        export GOOGLE_API_KEY="YOUR_GEMINI_API_KEY"
+        ```
+      * **Windows (Command Prompt):**
+        ```cmd
+        set GOOGLE_API_KEY=YOUR_GEMINI_API_KEY
+        ```
+      * **Windows (PowerShell):**
+        ```powershell
+        $env:GOOGLE_API_KEY="YOUR_GEMINI_API_KEY"
+        ```
+
+    - The agent will automatically load variables from a `.env` file if present.
 
 ## Running the Agent
 
@@ -94,3 +92,4 @@ To start the agent, run the `main.py` script:
 
 ```bash
 python main.py
+```

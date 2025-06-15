@@ -5,6 +5,7 @@ import time
 import subprocess
 from ..utils.logger import Logger
 from ..utils.window_utils import focus_window
+from ..utils.platform_utils import is_windows, is_mac, is_linux
 
 class SystemInteraction:
     def __init__(self):
@@ -43,15 +44,19 @@ class SystemInteraction:
         pyautogui.hotkey(*args)
     
     def execute_shell_command(self, command: str, background: bool = False) -> tuple[int, str, str]:
-        """Executes a shell command. If background=True, runs non-blocking and returns immediately."""
+        """Executes a shell command. If background=True, runs non-blocking and returns immediately. Platform-aware."""
         self.logger.info(f"Executing shell command: '{command}' (background={background})")
+        if is_windows():
+            shell = True
+        else:
+            shell = False
         try:
             if background:
-                process = subprocess.Popen(command, shell=True)
+                process = subprocess.Popen(command, shell=shell)
                 self.logger.info(f"Started background process PID={process.pid}")
                 return 0, f"Started background process PID={process.pid}", ""
             else:
-                process = subprocess.run(command, shell=True, capture_output=True, text=True, check=False)
+                process = subprocess.run(command, shell=shell, capture_output=True, text=True, check=False)
                 self.logger.info(f"Command '{command}' executed. Stdout: {process.stdout.strip()}")
                 return process.returncode, process.stdout, process.stderr
         except subprocess.CalledProcessError as e:
@@ -65,7 +70,10 @@ class SystemInteraction:
             return -1, "", str(e)
 
     def focus_window(self, title_substring: str, timeout: float = 5.0) -> bool:
-        """Focuses a window whose title contains the given substring."""
+        """Focuses a window whose title contains the given substring. Only works on Windows."""
+        if not is_windows():
+            self.logger.warning("Window focusing is only supported on Windows.")
+            return False
         return focus_window(title_substring, timeout)
 
     # --- Selenium functions (Conceptual - requires more setup) ---

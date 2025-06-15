@@ -4,6 +4,7 @@ import pyautogui
 from PIL import Image
 import io
 from ..utils.logger import Logger # Import Logger
+from ..utils.platform_utils import is_windows, is_mac, is_linux
 
 class ScreenCapture:
     def __init__(self):
@@ -25,14 +26,10 @@ class ScreenCapture:
 
 
     def capture_screen(self, filename: str | None = None) -> Image.Image | None:
-        """Captures the entire screen. Optionally saves to a file.
-
-        Args:
-            filename (str | None): The file name to save the screenshot. If None, the screenshot is not saved.
-
-        Returns:
-            Image.Image | None: The captured screenshot as a PIL Image object, or None if failed.
-        """
+        """Captures the entire screen. Optionally saves to a file. Platform-aware."""
+        if not (is_windows() or is_mac() or is_linux()):
+            self.logger.error("Screen capture is not supported on this platform.")
+            return None
         try:
             screenshot = pyautogui.screenshot()
             if filename:

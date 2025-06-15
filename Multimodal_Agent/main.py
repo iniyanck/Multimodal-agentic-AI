@@ -2,6 +2,7 @@
 
 import os
 import sys
+from dotenv import load_dotenv
 
 # Add the parent directory to the system path to allow for relative imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'agent_ai')))
@@ -12,12 +13,14 @@ from agent_ai.core.agent_core import AgentCore
 import google.generativeai as genai
 
 def main():
+    # Load environment variables from .env if present
+    load_dotenv()
     # It's highly recommended to load API keys from environment variables for security.
     # Set your GOOGLE_API_KEY environment variable.
     api_key = os.environ.get("GOOGLE_API_KEY") 
     if not api_key:
         print("WARNING: GOOGLE_API_KEY environment variable not set.")
-        print("Please set it (e.g., export GOOGLE_API_KEY='your_key_here') or replace the placeholder in main.py.")
+        print("Please set it (e.g., export GOOGLE_API_KEY='your_key_here') or add it to a .env file in the project root.")
         # For demonstration purposes ONLY, you can hardcode it here if you understand the security implications.
         # api_key = "YOUR_HARDCODED_GEMINI_API_KEY" # <--- REPLACE WITH YOUR ACTUAL API KEY IF NOT USING ENV VARS!
         sys.exit("API Key not found. Exiting.")

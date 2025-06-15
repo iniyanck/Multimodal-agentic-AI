@@ -6,6 +6,7 @@ from ..action.system_interaction import SystemInteraction
 from ..action.feedback_handler import FeedbackHandler
 from ..memory.knowledge_base import KnowledgeBase
 from ..core.global_prompt import GlobalPrompt
+from ..utils.platform_utils import is_windows, is_mac, is_linux, get_platform_name
 import time
 import json
 import io
@@ -91,13 +92,14 @@ class AgentCore:
             return {"action": "unknown", "error": f"Unexpected parsing error: {e}"}
 
     def _get_available_tools_description(self) -> str:
-        """Generates a string describing the available tools for the LLM."""
-        tools_description = """
-Available Tools and their usage (output ONLY a JSON object with 'action' and parameters):
+        """Generates a string describing the available tools for the LLM, with platform notes."""
+        platform_note = f"(Current platform: {get_platform_name()})"
+        tools_description = f"""
+Available Tools and their usage {platform_note} (output ONLY a JSON object with 'action' and parameters):
 - read_file(file: str): Reads the content of a specified file.
 - write_file(file: str, content: str): Writes content to a specified file.
-- execute_shell_command(command: str, background: bool = False): Executes a shell command. If background=True, runs non-blocking and returns immediately.
-- focus_window(title_substring: str): Focuses a window whose title contains the given substring.
+- execute_shell_command(command: str, background: bool = False): Executes a shell command. If background=True, runs non-blocking and returns immediately. (Platform-aware)
+- focus_window(title_substring: str): Focuses a window whose title contains the given substring. (Windows only)
 - list_directory(path: str = "."): Lists the contents of a directory.
 - capture_screen(file: str): Captures the current screen and saves it. Use this to get visual context.
 - move_mouse(x: int, y: int): Moves the mouse to absolute screen coordinates.

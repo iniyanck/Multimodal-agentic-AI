@@ -9,6 +9,8 @@ class KnowledgeBase:
 
     def __init__(self, db_name: str = "agent_knowledge.db"):
         """Initializes the knowledge base with a SQLite database."""
+        from ..utils.logger import Logger
+        self.logger = Logger()
         self.db_path = os.path.join(os.path.dirname(__file__), db_name)
         self._initialize_db()
 
@@ -33,9 +35,9 @@ class KnowledgeBase:
                 )
             """)
             conn.commit()
-            print(f"KnowledgeBase initialized at {self.db_path}")
+            self.logger.info(f"KnowledgeBase initialized at {self.db_path}")
         except sqlite3.Error as e:
-            print(f"Error initializing database: {e}")
+            self.logger.error(f"Error initializing database: {e}")
         finally:
             if conn:
                 conn.close()
@@ -48,10 +50,10 @@ class KnowledgeBase:
             cursor = conn.cursor()
             cursor.execute("INSERT OR REPLACE INTO knowledge (key, value) VALUES (?, ?)", (key, value))
             conn.commit()
-            print(f"Stored knowledge: {key} = {value[:50]}...") # Truncate for display
+            self.logger.info(f"Stored knowledge: {key} = {value[:50]}...")
             return True
         except sqlite3.Error as e:
-            print(f"Error storing knowledge: {e}")
+            self.logger.error(f"Error storing knowledge: {e}")
             return False
         finally:
             if conn:
@@ -66,12 +68,12 @@ class KnowledgeBase:
             cursor.execute("SELECT value FROM knowledge WHERE key = ?", (key,))
             result = cursor.fetchone()
             if result:
-                print(f"Retrieved knowledge for {key}")
+                self.logger.info(f"Retrieved knowledge for {key}")
                 return result[0]
-            print(f"No knowledge found for key: {key}")
+            self.logger.info(f"No knowledge found for key: {key}")
             return None
         except sqlite3.Error as e:
-            print(f"Error retrieving knowledge: {e}")
+            self.logger.error(f"Error retrieving knowledge: {e}")
             return None
         finally:
             if conn:
@@ -85,10 +87,10 @@ class KnowledgeBase:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM knowledge WHERE key = ?", (key,))
             conn.commit()
-            print(f"Deleted knowledge for key: {key}")
+            self.logger.info(f"Deleted knowledge for key: {key}")
             return True
         except sqlite3.Error as e:
-            print(f"Error deleting knowledge: {e}")
+            self.logger.error(f"Error deleting knowledge: {e}")
             return False
         finally:
             if conn:
@@ -101,13 +103,12 @@ class KnowledgeBase:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             state_json = json.dumps(state)
-            # We'll just update the single agent state entry, or insert if it doesn't exist
             cursor.execute("INSERT OR REPLACE INTO agent_state (id, state_data) VALUES (1, ?)", (state_json,))
             conn.commit()
-            print("Agent state stored.")
+            self.logger.info("Agent state stored.")
             return True
         except sqlite3.Error as e:
-            print(f"Error storing agent state: {e}")
+            self.logger.error(f"Error storing agent state: {e}")
             return False
         finally:
             if conn:
@@ -123,12 +124,12 @@ class KnowledgeBase:
             result = cursor.fetchone()
             if result:
                 state = json.loads(result[0])
-                print("Agent state loaded.")
+                self.logger.info("Agent state loaded.")
                 return state
-            print("No agent state found.")
+            self.logger.info("No agent state found.")
             return None
         except sqlite3.Error as e:
-            print(f"Error loading agent state: {e}")
+            self.logger.error(f"Error loading agent state: {e}")
             return None
         finally:
             if conn:

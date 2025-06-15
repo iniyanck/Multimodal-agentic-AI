@@ -3,6 +3,8 @@
 class ShortTermMemory:
     def __init__(self, max_size: int = 10):
         """Initializes short-term memory with a buffer of limited size."""
+        from ..utils.logger import Logger
+        self.logger = Logger()
         self.memory_buffer = []
         self.max_size = max_size # Keep last N relevant observations/thoughts
 
@@ -19,7 +21,7 @@ class ShortTermMemory:
     def clear_memory(self):
         """Clears the short-term memory."""
         self.memory_buffer = []
-        print("Short-term memory cleared.")
+        self.logger.info("Short-term memory cleared.")
 
 # Example Usage
 if __name__ == "__main__":
