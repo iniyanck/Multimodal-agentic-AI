@@ -73,6 +73,7 @@ class AgentCore:
         Example: {"action": "read_file", "file": "example.txt"}
         """
         try:
+            # Find the first occurrence of '{' and the last occurrence of '}'
             start_idx = response.find('{')
             end_idx = response.rfind('}')
 
@@ -80,9 +81,9 @@ class AgentCore:
                 json_string = response[start_idx : end_idx + 1]
                 parsed_data = json.loads(json_string)
 
-                if "action" not in parsed_data and "plan" not in parsed_data: # Modified for planning
-                    self.logger.error(f"Parsed JSON missing 'action' or 'plan' key: {parsed_data}")
-                    return {"action": "unknown", "error": "Parsed JSON missing 'action' or 'plan' key"}
+                if "action" not in parsed_data and "plan" not in parsed_data and "status" not in parsed_data: # Modified for planning and reflection
+                    self.logger.error(f"Parsed JSON missing 'action', 'plan', or 'status' key: {parsed_data}")
+                    return {"action": "unknown", "error": "Parsed JSON missing required key ('action', 'plan', or 'status')"}
 
                 return parsed_data
             else:
@@ -102,7 +103,7 @@ class AgentCore:
         This can be dynamically generated or hardcoded.
         """
         tools_description = """
-Available Tools and their usage:
+Available Tools and their usage (output ONLY a JSON object with 'action' and parameters):
 - read_file(file: str): Reads the content of a specified file.
 - write_file(file: str, content: str): Writes content to a specified file.
 - execute_shell_command(command: str): Executes a shell command and returns stdout/stderr.
@@ -145,10 +146,10 @@ Available Tools and their usage:
             self.logger.error(f"LLM failed to generate a valid plan: {parsed_response.get('error', llm_response)}")
             return [] # Return empty plan if invalid
 
-    def _execute_action(self, parsed_action: dict) -> str:
-        """Executes the action decided by the LLM."""
+    def _execute_action(self, parsed_action: dict) -> dict: # Changed return type to dict for structured feedback
+        """Executes the action decided by the LLM and returns structured feedback."""
         action_type = parsed_action.get("action")
-        feedback = "Action executed successfully."
+        feedback = {"status": "success", "message": "Action executed successfully.", "details": {}}
 
         # Add a record to history for debugging and future context
         action_entry = {"timestamp": time.time(), "action": parsed_action}
@@ -159,43 +160,60 @@ Available Tools and their usage:
                 filename = parsed_action.get("file")
                 content = self.file_io.read_file(filename)
                 self.agent_state["last_read_content"] = content
-                feedback = f"Read content of {filename}: {content[:100]}..." if content else f"File read failed for {filename}."
+                feedback["details"]["filename"] = filename
+                feedback["details"]["content_preview"] = content[:200] + "..." if content else "No content"
+                if not content:
+                    feedback["status"] = "failure"
+                    feedback["message"] = f"File read failed or file is empty for {filename}."
             elif action_type == "write_file":
                 filename = parsed_action.get("file")
                 content = parsed_action.get("content")
                 if self.file_io.write_file(filename, content):
-                    feedback = f"Wrote to {filename}."
+                    feedback["details"]["filename"] = filename
+                    feedback["details"]["content_written_preview"] = content[:100] + "..."
                 else:
-                    feedback = f"Failed to write to {filename}."
+                    feedback["status"] = "failure"
+                    feedback["message"] = f"Failed to write to {filename}."
             elif action_type == "execute_shell_command":
                 command = parsed_action.get("command")
                 if command:
                     return_code, stdout, stderr = self.system_interaction.execute_shell_command(command)
+                    feedback["details"]["command"] = command
+                    feedback["details"]["return_code"] = return_code
+                    feedback["details"]["stdout"] = stdout.strip()
+                    feedback["details"]["stderr"] = stderr.strip()
                     if return_code == 0:
-                        feedback = f"Command '{command}' executed successfully. Output: {stdout.strip()}"
+                        feedback["message"] = f"Command '{command}' executed successfully."
                     else:
-                        feedback = f"Command '{command}' failed (Exit Code: {return_code}). Error: {stderr.strip()}"
+                        feedback["status"] = "failure"
+                        feedback["message"] = f"Command '{command}' failed (Exit Code: {return_code})."
                 else:
-                    feedback = "execute_shell_command action missing 'command' parameter."
-                    self.logger.warning(feedback)
+                    feedback["status"] = "failure"
+                    feedback["message"] = "execute_shell_command action missing 'command' parameter."
+                    self.logger.warning(feedback["message"])
             elif action_type == "list_directory":
                 path = parsed_action.get("path", ".")
                 contents = self.file_io.list_directory(path)
                 self.agent_state["last_directory_list"] = contents
-                feedback = f"Directory contents of {path}: {contents}" if contents is not None else "Directory listing failed."
+                feedback["details"]["path"] = path
+                feedback["details"]["contents"] = contents
+                if contents is None:
+                    feedback["status"] = "failure"
+                    feedback["message"] = "Directory listing failed."
             elif action_type == "capture_screen":
                 filename = parsed_action.get("file")
                 screenshot_bytes = self.screen_capture.capture_screen_bytes(filename)
                 if screenshot_bytes:
                     self.agent_state["last_screenshot_bytes"] = base64.b64encode(screenshot_bytes).decode('utf-8')
-                    feedback = f"Captured screen to {filename}."
+                    feedback["details"]["filename"] = filename
                 else:
-                    feedback = "Screen capture failed."
+                    feedback["status"] = "failure"
+                    feedback["message"] = "Screen capture failed."
             elif action_type == "move_mouse":
                 x = int(parsed_action.get("x", 0))
                 y = int(parsed_action.get("y", 0))
                 self.system_interaction.move_mouse(x, y)
-                feedback = f"Moved mouse to ({x},{y})."
+                feedback["details"]["coordinates"] = {"x": x, "y": y}
             elif action_type == "click":
                 x = int(parsed_action.get("x", -1))
                 y = int(parsed_action.get("y", -1))
@@ -204,56 +222,66 @@ Available Tools and their usage:
                     self.system_interaction.click(x, y, button)
                 else:
                     self.system_interaction.click(button=button)
-                feedback = f"Clicked at ({x},{y}) with {button} button."
+                feedback["details"]["coordinates"] = {"x": x, "y": y}
+                feedback["details"]["button"] = button
             elif action_type == "type_text":
                 text = parsed_action.get("text")
                 self.system_interaction.type_text(text)
-                feedback = f"Typed text: '{text}'."
+                feedback["details"]["text_typed_preview"] = text[:50] + "..."
             elif action_type == "press_key":
                 key = parsed_action.get("key")
                 self.system_interaction.press_key(key)
-                feedback = f"Pressed key: '{key}'."
+                feedback["details"]["key"] = key
             elif action_type == "hotkey":
                 keys = parsed_action.get("keys", "").split('+')
                 self.system_interaction.hotkey(*keys)
-                feedback = f"Pressed hotkey: {keys}."
+                feedback["details"]["keys"] = keys
             elif action_type == "store_knowledge":
                 key = parsed_action.get("key")
                 value = parsed_action.get("value")
                 if self.knowledge_base.store_knowledge(key, value):
-                    feedback = f"Knowledge '{key}' stored."
+                    feedback["details"]["key"] = key
                 else:
-                    feedback = f"Failed to store knowledge '{key}'."
+                    feedback["status"] = "failure"
+                    feedback["message"] = f"Failed to store knowledge '{key}'."
             elif action_type == "retrieve_knowledge":
                 key = parsed_action.get("key")
                 value = self.knowledge_base.retrieve_knowledge(key)
                 self.agent_state["last_retrieved_knowledge"] = value
-                feedback = f"Retrieved knowledge for '{key}': {value}" if value else f"No knowledge for '{key}'."
+                feedback["details"]["key"] = key
+                feedback["details"]["value"] = value
+                if not value:
+                    feedback["message"] = f"No knowledge for '{key}'." # Not necessarily a failure
             elif action_type == "ask_user":
                 question = parsed_action.get("question")
                 print(f"\nAGENT ASKS: {question}")
                 user_response = input("Your response: ")
                 self.feedback_handler.receive_feedback(user_response)
-                feedback = f"User asked: {question}. User responded: {user_response}"
+                feedback["details"]["question"] = question
+                feedback["details"]["user_response"] = user_response
+                feedback["message"] = f"User responded to question."
             elif action_type == "wait":
                 duration = int(parsed_action.get("duration", 1))
                 print(f"Agent waiting for {duration} seconds...")
                 self.logger.info(f"Agent waiting for {duration} seconds...")
                 time.sleep(duration)
-                feedback = f"Agent waited for {duration} seconds."
+                feedback["details"]["duration"] = duration
             elif action_type == "task_complete":
                 self.logger.info("Task reported as complete by LLM.")
-                feedback = "Task completed successfully."
+                feedback["message"] = "Task completed successfully."
                 self.agent_state["status"] = "completed"
             else:
-                feedback = f"Unknown action: {action_type}. Please refine the LLM's output."
-                self.logger.error(feedback)
+                feedback["status"] = "failure"
+                feedback["message"] = f"Unknown action: {action_type}. Please refine the LLM's output."
+                self.logger.error(feedback["message"])
         except Exception as e:
-            feedback = f"Error executing action {action_type}: {e}"
+            feedback["status"] = "failure"
+            feedback["message"] = f"Error executing action {action_type}: {e}"
+            feedback["details"]["exception"] = str(e)
             print(f"Error during action execution: {e}")
             self.logger.error(f"Error during action execution: {e}", exc_info=True)
 
-        self.agent_state["last_action_feedback"] = feedback
+        self.agent_state["last_action_feedback"] = feedback # Store structured feedback
         self.knowledge_base.store_agent_state(self.agent_state)
         return feedback
 
@@ -267,12 +295,16 @@ Available Tools and their usage:
         MAX_PARSE_RETRIES = 3
         parse_failures = 0
 
+        MAX_ACTION_EXECUTION_RETRIES = 2 # Max retries for a single action within a plan step
+        action_execution_retries = 0
+
         while True:
             if self.agent_state["status"] == "planning":
                 print("\n--- Agent Planning ---")
                 current_context = self.global_prompt_manager.get_current_context(self.agent_state)
                 self.agent_state["current_plan"] = self._plan_task(self.agent_state["current_task"], current_context)
                 self.agent_state["plan_step"] = 0
+                action_execution_retries = 0 # Reset retries for new plan
 
                 if not self.agent_state["current_plan"]:
                     self.logger.error("Failed to generate a plan. Halting agent.")
@@ -285,8 +317,7 @@ Available Tools and their usage:
             elif self.agent_state["status"] == "executing_plan":
                 if self.agent_state["plan_step"] >= len(self.agent_state["current_plan"]):
                     print("\n--- All steps in the current plan executed. Agent considering next steps or task completion. ---")
-                    # Here, the agent can decide to generate a new plan, or mark task as complete
-                    # For now, let's go back to planning to allow for iterative refinement
+                    # If all steps completed, transition to planning to allow LLM to decide if task is truly complete
                     self.agent_state["status"] = "planning"
                     continue # Go back to the top of the loop for planning
 
@@ -297,17 +328,23 @@ Available Tools and their usage:
                 screenshot_path = "current_screen_step.png"
                 screen_image_bytes = self.screen_capture.capture_screen_bytes(screenshot_path)
 
-                # Gather feedback
+                # Gather user feedback
                 latest_feedback = self.feedback_handler.get_latest_feedback()
                 if latest_feedback:
                     print(f"\nReceived user feedback: {latest_feedback}")
                     self.agent_state = self.feedback_handler.process_feedback(self.agent_state, latest_feedback)
+                    # If user feedback significantly changes context, might want to re-plan
+                    # self.agent_state["status"] = "planning"
+                    # continue
 
                 # Construct LLM Prompt for action execution (now it's more about refining the current step)
+                # Pass structured feedback to LLM
+                last_action_feedback_str = json.dumps(self.agent_state.get('last_action_feedback', {"status": "none", "message": "No previous action feedback."}))
+
                 action_prompt = self.global_prompt_manager.get_action_execution_prompt(
                     current_task_description=self.agent_state["current_task"],
                     current_plan_step=current_step,
-                    last_action_feedback=self.agent_state.get('last_action_feedback', 'None'),
+                    last_action_feedback=last_action_feedback_str, # Pass structured feedback
                     last_read_content=self.agent_state.get('last_read_content'),
                     last_directory_list=self.agent_state.get('last_directory_list'),
                     last_retrieved_knowledge=self.agent_state.get('last_retrieved_knowledge'),
@@ -325,29 +362,67 @@ Available Tools and their usage:
                         self.logger.error("Too many LLM output parsing failures for a plan step. Going back to planning.")
                         self.agent_state["status"] = "planning" # Go back to planning if current step cannot be parsed
                         parse_failures = 0 # Reset counter
+                        action_execution_retries = 0 # Reset retries for new plan
                         continue
                     else:
-                        self.agent_state["last_action_feedback"] = f"Previous LLM response parsing failed for current plan step: {parsed_action.get('error', 'Unknown error')}. Please ensure your response is ONLY a single, valid JSON object with an 'action' key and parameters for the action: {current_step.get('action')}."
-                        continue # Skip action execution, re-prompt LLM for this step
+                        # Provide explicit feedback to LLM about parsing failure for the next retry on this step
+                        self.agent_state["last_action_feedback"] = {
+                            "status": "failure",
+                            "message": f"LLM response parsing failed. Expected ONLY a single JSON object for action parameters. Error: {parsed_action.get('error', 'Unknown error')}. Please output a valid JSON object matching the action schema for: {current_step.get('action')}."
+                        }
+                        continue # Skip action execution, re-prompt LLM for this step with feedback
 
                 parse_failures = 0 # Reset counter on successful parse
 
                 # 3. Action Execution
                 print(f"\n--- Agent Acting (from plan): {parsed_action['action']} ---")
-                action_result_feedback = self._execute_action(parsed_action)
-                print(f"Action Result: {action_result_feedback}")
+                action_result_feedback = self._execute_action(parsed_action) # This now returns a dict
+                print(f"Action Result: {action_result_feedback['status'].upper()} - {action_result_feedback['message']}")
 
-                # 4. Reflection and Confirmation
-                # Here, you might want another LLM call to assess if the action was successful
-                # based on `action_result_feedback` and current observations.
-                # For simplicity, we'll assume success if no error was reported in feedback.
-                if "Error" in action_result_feedback or "Failed" in action_result_feedback:
-                    self.logger.warning(f"Action failed at plan step {self.agent_state['plan_step']}: {action_result_feedback}. Going back to planning.")
-                    self.agent_state["status"] = "planning" # Go back to planning if action failed
-                    self.agent_state["last_action_feedback"] = f"Action '{parsed_action.get('action')}' failed: {action_result_feedback}. Please adjust the plan."
-                else:
+                # 4. Reflection and Confirmation (New Step)
+                # After executing an action, prompt the LLM to reflect on its success
+                reflection_prompt = self.global_prompt_manager.get_reflection_prompt(
+                    current_task_description=self.agent_state["current_task"],
+                    current_plan_step=current_step,
+                    action_executed=parsed_action,
+                    action_result=action_result_feedback, # Pass structured result
+                    current_context=self.global_prompt_manager.get_current_context(self.agent_state), # Fresh context
+                    history=self.agent_state["history"]
+                )
+                print("\n--- Agent Reflecting on Action Outcome ---")
+                reflection_llm_response = self._call_llm(reflection_prompt, image_data=screen_image_bytes) # Pass screenshot again for reflection
+                reflection_parsed = self._parse_llm_response(reflection_llm_response)
+
+                action_successful_in_reflection = reflection_parsed.get("status") == "success"
+                reflection_thought = reflection_parsed.get("thought", "No specific reflection thought provided.")
+
+                print(f"Agent's Reflection: {reflection_thought}")
+
+                if action_successful_in_reflection:
+                    self.logger.info(f"LLM confirmed action success for plan step {self.agent_state['plan_step']}. Moving to next step.")
                     self.agent_state["plan_step"] += 1 # Move to next step if successful
+                    action_execution_retries = 0 # Reset retries
                     self.agent_state["last_action_feedback"] = action_result_feedback # Update feedback for next prompt
+                else:
+                    action_execution_retries += 1
+                    self.logger.warning(f"LLM indicated action failure or requested re-evaluation for step {self.agent_state['plan_step']}. Retries: {action_execution_retries}/{MAX_ACTION_EXECUTION_RETRIES}. LLM reason: {reflection_parsed.get('message', 'No message')}")
+                    if action_execution_retries >= MAX_ACTION_EXECUTION_RETRIES:
+                        self.logger.error(f"Too many action execution retries for plan step {self.agent_state['plan_step']}. Going back to planning to adjust strategy.")
+                        self.agent_state["status"] = "planning" # Go back to planning if action repeatedly fails or LLM can't confirm
+                        action_execution_retries = 0 # Reset retries
+                        # Provide explicit feedback for re-planning
+                        self.agent_state["last_action_feedback"] = {
+                            "status": "failure",
+                            "message": f"Action '{parsed_action.get('action')}' for plan step '{current_step.get('description', 'N/A')}' repeatedly failed or could not be confirmed. LLM said: {reflection_parsed.get('message', 'No specific reason.')}. Please adjust the plan."
+                        }
+                    else:
+                        # If retrying, LLM needs to know the action failed and its reflection
+                        self.agent_state["last_action_feedback"] = {
+                            "status": "failure",
+                            "message": f"Previous action '{parsed_action.get('action')}' failed (LLM reflection). Retrying step. LLM reason: {reflection_parsed.get('message', 'No specific reason.')}",
+                            "details": action_result_feedback['details']
+                        }
+                        # Do not increment plan_step, remain on current step for retry
 
             if self.agent_state["status"] == "completed":
                 print("\n--- Agent finished its task. ---")
@@ -374,7 +449,7 @@ if __name__ == "__main__":
                     {"action": "read_file", "file": "ai_notes.txt", "description": "Verify the file content."},
                     {"action": "task_complete", "description": "Task is done."}
                 ]})})
-            else: # Action execution phase
+            elif "ACTION_EXECUTION_PROMPT" in prompt:
                 print("Mock LLM: Action execution phase...")
                 if "list_directory" in prompt:
                     return type('obj', (object,), {'text' : json.dumps({"action": "list_directory", "path": "."})})
@@ -386,7 +461,26 @@ if __name__ == "__main__":
                     return type('obj', (object,), {'text' : json.dumps({"action": "task_complete"})})
                 else:
                     return type('obj', (object,), {'text' : json.dumps({"action": "unknown", "error": "Mock LLM didn't understand action."})})
+            elif "REFLECTION_PROMPT" in prompt:
+                print("Mock LLM: Reflection phase...")
+                # Simulate success for all actions in this mock
+                if '"status": "failure"' in prompt: # If previous action was reported as failure
+                     # Simulate reflection recommending re-attempt or re-plan if needed
+                    return type('obj', (object,), {'text' : json.dumps({
+                        "status": "failure",
+                        "thought": "The previous action failed. I will try to adjust my approach or re-attempt it.",
+                        "message": "Action verification failed or adjustment needed."
+                    })})
+                else:
+                    return type('obj', (object,), {'text' : json.dumps({
+                        "status": "success",
+                        "thought": "The action seems to have completed successfully. Moving to the next step.",
+                        "message": "Action verified as successful."
+                    })})
+            else:
+                return type('obj', (object,), {'text' : json.dumps({"action": "unknown", "error": "Mock LLM didn't understand prompt type."})})
 
 
     agent = AgentCore(llm_client=MockLLMClient()) # Pass your actual LLM client here
-    agent.run_agent("List the files in the current directory, then create a new file named 'ai_notes.txt' with content 'My first AI note.'")
+    # Example task adjusted to reflect the mock LLM's capabilities
+    agent.run_agent("List the files in the current directory, then create a new file named 'ai_notes.txt' with content 'My first AI note.'. Finally, verify the file content and indicate task completion.")
