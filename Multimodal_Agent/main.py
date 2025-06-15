@@ -31,12 +31,14 @@ from agent_ai.core.agent_core import AgentCore
 def run_agent_with_async_input(agent: AgentCore, initial_task: str):
     last_seen = 0.0
     agent.run_agent(initial_task)
-    while True:
+    # Only allow new input if the agent did NOT complete the task
+    while agent.agent_state.get("status") not in ["completed", "aborted"]:
         user_input, last_seen = check_for_user_input(last_seen)
         if user_input:
             print(f"\n[Async User Input Detected]: {user_input}")
             agent.run_agent(user_input)
         time.sleep(2)  # Check every 2 seconds
+    print("\nAgent has completed or aborted the task. No further user input will be processed until restart.")
 
 def main() -> None:
     """Entry point for the Multimodal Agent. Loads environment, configures LLM, and starts the agent."""

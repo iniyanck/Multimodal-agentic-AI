@@ -21,3 +21,22 @@ Thumbs.db
 
 # SQLite DB
 *.db
+
+#Images
+*.png
+
+# User/Personal Data
+user_input.txt
+*.key
+*.pem
+*.crt
+*.pfx
+*.env
+*.db
+*.sqlite
+*.bak
+*.swp
+# Exclude any files with sensitive or personal info
+*password*
+*secret*
+*token*

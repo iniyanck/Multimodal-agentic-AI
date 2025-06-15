@@ -9,7 +9,7 @@ from ..memory.knowledge_base import KnowledgeBase
 from ..core.global_prompt import GlobalPrompt
 from ..utils.platform_utils import is_windows, is_mac, is_linux, get_platform_name
 from ..utils.path_utils import resolve_special_folder
-from ..utils.file_search import find_video_files_by_keyword
+from ..utils.file_search import find_video_files_by_keyword, find_video_files_by_keyword_recursive
 import time
 import json
 import io
@@ -208,7 +208,7 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                         video_dir = os.path.join(os.path.expanduser("~"), "Videos")
                     # Try to find a matching video file
                     for keyword in user_keywords:
-                        matches = find_video_files_by_keyword(video_dir, keyword)
+                        matches = find_video_files_by_keyword_recursive(video_dir, keyword)
                         if matches:
                             # Use the first/best match
                             command = f'start "" "{os.path.join(video_dir, matches[0])}"'
@@ -322,7 +322,12 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 time.sleep(duration)
                 feedback["details"]["duration"] = duration
             elif action_type == "task_complete":
-                # Prevent repeated user feedback loops
+                # Safeguard: Only allow task_complete if the agent has not already completed the task
+                if self.agent_state.get("status") == "completed":
+                    feedback["status"] = "skipped"
+                    feedback["message"] = "Task already marked as completed. Skipping duplicate task_complete."
+                    self.logger.info(feedback["message"])
+                    return feedback
                 if self.agent_state.get("status") == "aborted":
                     feedback["status"] = "failure"
                     feedback["message"] = "Task previously marked as failed by user. Aborting further completion attempts."
