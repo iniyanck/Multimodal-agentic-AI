@@ -4,9 +4,11 @@ import logging
 import os
 
 class Logger:
+    """Logger class for logging messages to file and console."""
     _initialized = False # Class-level flag
 
     def __init__(self, log_file: str = "agent.log", level=logging.INFO):
+        """Initializes the logger, sets up file and console handlers."""
         if not Logger._initialized: # Only run basicConfig once
             log_dir = os.path.join(os.path.dirname(__file__), '..', 'logs')
             os.makedirs(log_dir, exist_ok=True)
@@ -34,15 +36,19 @@ class Logger:
             # self.logger.debug("Logger already initialized, reusing existing instance.")
 
     def info(self, message: str, *args, **kwargs):
+        """Logs an informational message."""
         self.logger.info(message, *args, **kwargs)
 
     def warning(self, message: str, *args, **kwargs):
+        """Logs a warning message."""
         self.logger.warning(message, *args, **kwargs)
 
     def error(self, message: str, *args, **kwargs):
+        """Logs an error message."""
         self.logger.error(message, *args, **kwargs)
 
     def debug(self, message: str, *args, **kwargs):
+        """Logs a debug message."""
         self.logger.debug(message, *args, **kwargs)
 
 # Example Usage (for testing)

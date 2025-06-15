@@ -4,7 +4,8 @@ import os
 from ..utils.logger import Logger # Import Logger
 
 class FileIO:
-    def __init__(self, base_path="."):
+    def __init__(self, base_path: str = "."):
+        """Initializes FileIO with a base path for file operations."""
         self.base_path = base_path
         self.logger = Logger() # Initialize Logger
 
@@ -17,7 +18,7 @@ class FileIO:
         image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp']
         if any(filepath.lower().endswith(ext) for ext in image_extensions):
             self.logger.error(f"Attempted to read binary image file '{filename}' as text. Use appropriate image handling for this file type.")
-            print(f"Error: Cannot read image file '{filename}' as text. This function is for text files.")
+            self.logger.warning(f"Error: Cannot read image file '{filename}' as text. This function is for text files.")
             return None
 
         try:
@@ -27,11 +28,11 @@ class FileIO:
             return content
         except FileNotFoundError:
             self.logger.error(f"Error: File not found at {filepath}")
-            print(f"Error: File not found at {filepath}")
+            self.logger.warning(f"Error: File not found at {filepath}")
             return None
         except Exception as e:
             self.logger.error(f"Error reading file {filename}: {e}", exc_info=True)
-            print(f"Error reading file {filename}: {e}")
+            self.logger.warning(f"Error reading file {filename}: {e}")
             return None
 
     def write_file(self, filename: str, content: str) -> bool:

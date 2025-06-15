@@ -4,14 +4,13 @@ import pyautogui
 import time
 import subprocess
 from ..utils.logger import Logger
-# from selenium import webdriver # Uncomment if you use Selenium
-# from selenium.webdriver.common.by import By
-# from selenium.webdriver.support.ui import WebDriverWait
-# from selenium.webdriver.support import expected_conditions as EC
+from ..utils.window_utils import focus_window
 
 class SystemInteraction:
     def __init__(self):
+        """Initializes SystemInteraction and sets up PyAutoGUI failsafe."""
         pyautogui.FAILSAFE = True # Enable failsafe to prevent runaway scripts (move mouse to top-left corner)
+        self.logger = Logger()
 
     # --- PyAutoGUI functions ---
     def move_mouse(self, x: int, y: int, duration: float = 0.5):
@@ -43,17 +42,18 @@ class SystemInteraction:
         print(f"Pressing hotkey: {args}")
         pyautogui.hotkey(*args)
     
-    def execute_shell_command(self, command: str) -> tuple[int, str, str]:
-        """
-        Executes a shell command and returns its exit code, stdout, and stderr.
-        """
-        self.logger.info(f"Executing shell command: '{command}'") # Add logging
+    def execute_shell_command(self, command: str, background: bool = False) -> tuple[int, str, str]:
+        """Executes a shell command. If background=True, runs non-blocking and returns immediately."""
+        self.logger.info(f"Executing shell command: '{command}' (background={background})")
         try:
-            # For Windows, shell=True is often needed for commands like 'explorer'
-            # For cross-platform, prefer list format and explicit command if possible
-            process = subprocess.run(command, shell=True, capture_output=True, text=True, check=False)
-            self.logger.info(f"Command '{command}' executed successfully. Stdout: {process.stdout.strip()}")
-            return process.returncode, process.stdout, process.stderr
+            if background:
+                process = subprocess.Popen(command, shell=True)
+                self.logger.info(f"Started background process PID={process.pid}")
+                return 0, f"Started background process PID={process.pid}", ""
+            else:
+                process = subprocess.run(command, shell=True, capture_output=True, text=True, check=False)
+                self.logger.info(f"Command '{command}' executed. Stdout: {process.stdout.strip()}")
+                return process.returncode, process.stdout, process.stderr
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Command '{command}' failed with exit code {e.returncode}. Stderr: {e.stderr.strip()}", exc_info=True)
             return e.returncode, e.stdout, e.stderr
@@ -63,6 +63,10 @@ class SystemInteraction:
         except Exception as e:
             self.logger.error(f"Unexpected error executing command '{command}': {e}", exc_info=True)
             return -1, "", str(e)
+
+    def focus_window(self, title_substring: str, timeout: float = 5.0) -> bool:
+        """Focuses a window whose title contains the given substring."""
+        return focus_window(title_substring, timeout)
 
     # --- Selenium functions (Conceptual - requires more setup) ---
     # def initialize_browser(self, browser_type: str = 'chrome'):

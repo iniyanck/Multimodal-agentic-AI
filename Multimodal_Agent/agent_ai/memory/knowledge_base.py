@@ -5,7 +5,10 @@ import json
 import os
 
 class KnowledgeBase:
+    """KnowledgeBase manages the storage and retrieval of agent knowledge and state using a SQLite database."""
+
     def __init__(self, db_name: str = "agent_knowledge.db"):
+        """Initializes the knowledge base with a SQLite database."""
         self.db_path = os.path.join(os.path.dirname(__file__), db_name)
         self._initialize_db()
 

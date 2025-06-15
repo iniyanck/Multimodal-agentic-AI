@@ -7,6 +7,7 @@ from ..utils.logger import Logger # Import Logger
 
 class ScreenCapture:
     def __init__(self):
+        """Initializes ScreenCapture and checks for Pillow dependency."""
         pyautogui.FAILSAFE = True # Enable failsafe to prevent runaway scripts (move mouse to top-left corner)
         self.logger = Logger() # Initialize logger
 
@@ -24,9 +25,13 @@ class ScreenCapture:
 
 
     def capture_screen(self, filename: str | None = None) -> Image.Image | None:
-        """
-        Captures the entire screen.
-        If filename is provided, saves it. Otherwise, returns a PIL Image object.
+        """Captures the entire screen. Optionally saves to a file.
+
+        Args:
+            filename (str | None): The file name to save the screenshot. If None, the screenshot is not saved.
+
+        Returns:
+            Image.Image | None: The captured screenshot as a PIL Image object, or None if failed.
         """
         try:
             screenshot = pyautogui.screenshot()
@@ -45,9 +50,13 @@ class ScreenCapture:
             return None
 
     def capture_screen_bytes(self, filename: str | None = None) -> bytes | None:
-        """
-        Captures the entire screen and returns the image data as bytes.
-        If filename is provided, it also saves the screenshot to the file.
+        """Captures the entire screen and returns the image data as bytes. Optionally saves to a file.
+
+        Args:
+            filename (str | None): The file name to save the screenshot. If None, the screenshot is not saved.
+
+        Returns:
+            bytes | None: The captured screenshot image data as bytes, or None if failed.
         """
         try:
             screenshot_pil = pyautogui.screenshot()
@@ -68,9 +77,17 @@ class ScreenCapture:
             return None
 
     def capture_region(self, left: int, top: int, width: int, height: int, filename: str | None = None) -> Image.Image | None:
-        """
-        Captures a specific region of the screen.
-        If filename is provided, saves it. Otherwise, returns a PIL Image object.
+        """Captures a specific region of the screen. Optionally saves to a file.
+
+        Args:
+            left (int): The x-coordinate of the top-left corner of the region.
+            top (int): The y-coordinate of the top-left corner of the region.
+            width (int): The width of the region.
+            height (int): The height of the region.
+            filename (str | None): The file name to save the screenshot. If None, the screenshot is not saved.
+
+        Returns:
+            Image.Image | None: The captured region as a PIL Image object, or None if failed.
         """
         try:
             screenshot = pyautogui.screenshot(region=(left, top, width, height))
@@ -88,9 +105,17 @@ class ScreenCapture:
             return None
 
     def capture_region_bytes(self, left: int, top: int, width: int, height: int, filename: str | None = None) -> bytes | None:
-        """
-        Captures a specific region of the screen and returns the image data as bytes.
-        If filename is provided, it also saves the screenshot to the file.
+        """Captures a specific region of the screen and returns the image data as bytes. Optionally saves to a file.
+
+        Args:
+            left (int): The x-coordinate of the top-left corner of the region.
+            top (int): The y-coordinate of the top-left corner of the region.
+            width (int): The width of the region.
+            height (int): The height of the region.
+            filename (str | None): The file name to save the screenshot. If None, the screenshot is not saved.
+
+        Returns:
+            bytes | None: The captured region image data as bytes, or None if failed.
         """
         try:
             screenshot_pil = pyautogui.screenshot(region=(left, top, width, height))

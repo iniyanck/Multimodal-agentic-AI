@@ -2,6 +2,7 @@
 
 class FeedbackHandler:
     def __init__(self):
+        """Initializes the feedback handler with an empty queue."""
         self.feedback_queue = []
 
     def receive_feedback(self, feedback: str):

@@ -15,6 +15,7 @@ from ..utils.logger import Logger
 
 class AgentCore:
     def __init__(self, llm_client=None):
+        """Initializes the core agent with all subsystems and state."""
         self.file_io = FileIO()
         self.screen_capture = ScreenCapture()
         self.system_interaction = SystemInteraction()
@@ -27,11 +28,7 @@ class AgentCore:
         self.last_screenshot_pil = None
 
     def _call_llm(self, prompt: str, image_data: bytes | None = None) -> str:
-        """
-        Placeholder for calling your Large Language Model.
-        This is where you'd integrate with OpenAI, Google Gemini, etc.
-        If using a multimodal LLM, pass image_data.
-        """
+        """Calls the Large Language Model (LLM) with a prompt and optional image data."""
         if self.llm_client is None:
             self.logger.error("LLM client is not configured. Cannot make API call.")
             return json.dumps({"action": "unknown", "error": "LLM not configured"})
@@ -67,11 +64,7 @@ class AgentCore:
             return json.dumps({"action": "unknown", "error": f"LLM API error: {e}"})
 
     def _parse_llm_response(self, response: str) -> dict:
-        """
-        Parses the LLM's response assuming it contains a JSON string.
-        It tries to extract the JSON block even if there's surrounding text.
-        Example: {"action": "read_file", "file": "example.txt"}
-        """
+        """Parses the LLM's response, extracting a JSON object for action or plan."""
         try:
             # Find the first occurrence of '{' and the last occurrence of '}'
             start_idx = response.find('{')
@@ -98,15 +91,13 @@ class AgentCore:
             return {"action": "unknown", "error": f"Unexpected parsing error: {e}"}
 
     def _get_available_tools_description(self) -> str:
-        """
-        Generates a string describing the available tools for the LLM.
-        This can be dynamically generated or hardcoded.
-        """
+        """Generates a string describing the available tools for the LLM."""
         tools_description = """
 Available Tools and their usage (output ONLY a JSON object with 'action' and parameters):
 - read_file(file: str): Reads the content of a specified file.
 - write_file(file: str, content: str): Writes content to a specified file.
-- execute_shell_command(command: str): Executes a shell command and returns stdout/stderr.
+- execute_shell_command(command: str, background: bool = False): Executes a shell command. If background=True, runs non-blocking and returns immediately.
+- focus_window(title_substring: str): Focuses a window whose title contains the given substring.
 - list_directory(path: str = "."): Lists the contents of a directory.
 - capture_screen(file: str): Captures the current screen and saves it. Use this to get visual context.
 - move_mouse(x: int, y: int): Moves the mouse to absolute screen coordinates.
@@ -123,12 +114,7 @@ Available Tools and their usage (output ONLY a JSON object with 'action' and par
         return tools_description
 
     def _plan_task(self, task_description: str, current_context: str) -> list[dict]:
-        """
-        Uses the LLM to generate a plan (a sequence of actions) to achieve the task.
-        The LLM should output a JSON object with a "plan" key, which is a list of dictionaries.
-        Each dictionary should have at least an "action" key and a "description" key.
-        Example: {"plan": [{"action": "list_directory", "description": "See what files are here"}, {"action": "read_file", "file": "README.md", "description": "Read the README"}]}
-        """
+        """Uses the LLM to generate a plan (a sequence of actions) to achieve the task."""
         planning_prompt = self.global_prompt_manager.get_planning_prompt(
             task_description=task_description,
             current_context=current_context,
@@ -146,7 +132,7 @@ Available Tools and their usage (output ONLY a JSON object with 'action' and par
             self.logger.error(f"LLM failed to generate a valid plan: {parsed_response.get('error', llm_response)}")
             return [] # Return empty plan if invalid
 
-    def _execute_action(self, parsed_action: dict) -> dict: # Changed return type to dict for structured feedback
+    def _execute_action(self, parsed_action: dict) -> dict:
         """Executes the action decided by the LLM and returns structured feedback."""
         action_type = parsed_action.get("action")
         feedback = {"status": "success", "message": "Action executed successfully.", "details": {}}
@@ -176,20 +162,37 @@ Available Tools and their usage (output ONLY a JSON object with 'action' and par
                     feedback["message"] = f"Failed to write to {filename}."
             elif action_type == "execute_shell_command":
                 command = parsed_action.get("command")
+                background = parsed_action.get("background", False)
                 if command:
-                    return_code, stdout, stderr = self.system_interaction.execute_shell_command(command)
+                    return_code, stdout, stderr = self.system_interaction.execute_shell_command(command, background=background)
                     feedback["details"]["command"] = command
+                    feedback["details"]["background"] = background
                     feedback["details"]["return_code"] = return_code
-                    feedback["details"]["stdout"] = stdout.strip()
-                    feedback["details"]["stderr"] = stderr.strip()
+                    feedback["details"]["stdout"] = stdout.strip() if isinstance(stdout, str) else stdout
+                    feedback["details"]["stderr"] = stderr.strip() if isinstance(stderr, str) else stderr
                     if return_code == 0:
-                        feedback["message"] = f"Command '{command}' executed successfully."
+                        feedback["message"] = f"Command '{command}' executed successfully." if not background else f"Command '{command}' started in background."
                     else:
                         feedback["status"] = "failure"
                         feedback["message"] = f"Command '{command}' failed (Exit Code: {return_code})."
                 else:
                     feedback["status"] = "failure"
                     feedback["message"] = "execute_shell_command action missing 'command' parameter."
+                    self.logger.warning(feedback["message"])
+            elif action_type == "focus_window":
+                title_substring = parsed_action.get("title_substring")
+                if title_substring:
+                    success = self.system_interaction.focus_window(title_substring)
+                    feedback["details"]["title_substring"] = title_substring
+                    feedback["details"]["focused"] = success
+                    if success:
+                        feedback["message"] = f"Focused window with title containing '{title_substring}'."
+                    else:
+                        feedback["status"] = "failure"
+                        feedback["message"] = f"Could not find or focus window with title containing '{title_substring}'."
+                else:
+                    feedback["status"] = "failure"
+                    feedback["message"] = "focus_window action missing 'title_substring' parameter."
                     self.logger.warning(feedback["message"])
             elif action_type == "list_directory":
                 path = parsed_action.get("path", ".")

@@ -1,9 +1,10 @@
 # agent_ai/memory/short_term_memory.py
 
 class ShortTermMemory:
-    def __init__(self):
+    def __init__(self, max_size: int = 10):
+        """Initializes short-term memory with a buffer of limited size."""
         self.memory_buffer = []
-        self.max_size = 10 # Keep last 10 relevant observations/thoughts
+        self.max_size = max_size # Keep last N relevant observations/thoughts
 
     def add_event(self, event: str, type: str = "observation"):
         """Adds an event or observation to short-term memory."""

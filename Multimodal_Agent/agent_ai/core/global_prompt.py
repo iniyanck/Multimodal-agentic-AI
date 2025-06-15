@@ -3,6 +3,7 @@ import json
 
 class GlobalPrompt:
     def __init__(self):
+        """Initializes the global prompt manager with base instructions."""
         self.base_instruction = "You are an AI agent designed to interact with a computer system. Your goal is to accurately understand and execute user tasks."
 
     def get_planning_prompt(self, task_description: str, current_context: str, tools_description: str, history: list) -> str:
@@ -87,6 +88,7 @@ class GlobalPrompt:
         """
     
     def get_reflection_prompt(self, current_task_description, current_plan_step, action_executed, action_result, current_context, history):
+        """Constructs a prompt that asks the LLM to assess the success of the action and if the plan step is complete."""
         # Placeholder for reflection prompt generation logic
         # This should construct a prompt that asks the LLM to assess the success
         # of the action, and if the plan step can be considered complete.
@@ -96,6 +98,7 @@ class GlobalPrompt:
         return prompt
 
     def get_full_prompt(self, **kwargs):
+        """General reasoning prompt for the agent to decide the next best action."""
         # This method might become less central if planning and action execution have separate prompts.
         # However, it could still be used for a general "reasoning" prompt if the agent needs to
         # decide between planning or executing. For now, it's simplified.
