@@ -32,7 +32,7 @@ def main():
 
     # Initialize your LLM client here
     # For multimodal (Gemini 1.5 Flash is recommended for its speed and cost-effectiveness with vision):
-    llm_client = genai.GenerativeModel('gemini-1.5-flash') 
+    llm_client = genai.GenerativeModel('gemini-2.0-flash') 
     
     agent = AgentCore(llm_client=llm_client)
     
