@@ -167,6 +167,9 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
             return parsed_response["plan"]
         else:
             self.logger.error(f"LLM failed to generate a valid plan: {parsed_response.get('error', llm_response)}")
+            self.logger.error(f"Raw LLM response: {llm_response}")
+            self.logger.error(f"Planning prompt was: {planning_prompt}")
+            self.agent_state["status"] = "idle"  # Set to idle so user can retry
             return [] # Return empty plan if invalid
 
     def _execute_action(self, parsed_action: dict) -> dict:
@@ -417,6 +420,10 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
         self.agent_state["status"] = "planning" # Initial status
         print(f"\n--- Starting Agent ---")
         print(f"Initial Task: {initial_task}")
+        # --- Always capture a screenshot at the start of every task ---
+        screenshot_path = os.path.join(os.path.dirname(__file__), '..', 'logs', 'screens', 'current_screen_step.png')
+        self.screen_capture.capture_screen_bytes(screenshot_path)
+
         MAX_TOTAL_STEPS = 50
         total_steps = 0
 
@@ -468,7 +475,7 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 # Removed user confirmation for risky actions; proceed automatically
 
                 # 1. Perception/Observation for this step
-                screenshot_path = "current_screen_step.png"
+                screenshot_path = os.path.join(os.path.dirname(__file__), '..', 'logs', 'screens', 'current_screen_step.png')
                 screen_image_bytes = self.screen_capture.capture_screen_bytes(screenshot_path)
 
                 if self.stop_flag:
@@ -586,7 +593,7 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
             if self.agent_state["status"] == "completed":
                 print("\n--- Agent finished its task. ---")
                 self.self_evaluate_task()  # Automated self-evaluation after task completion
-                self.agent_state["status"] = "idle"  # Set to idle after completion
+                # self.agent_state["status"] = "idle"  # Remove this line
                 break
 
             # Small delay to prevent rapid-fire actions and allow observation

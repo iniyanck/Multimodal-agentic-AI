@@ -18,21 +18,42 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [fresh, setFresh] = useState(true); // new state
+  const [planningStuck, setPlanningStuck] = useState(false);
+  const [editingUserInput, setEditingUserInput] = useState(false);
+  const [killing, setKilling] = useState(false);
 
   // Only poll agent state if not fresh
   useEffect(() => {
+    let planningTimer;
     if (!fresh) {
       const fetchStatus = () => {
-        axios.get(`${API_BASE}/status`).then(res => setStatus(res.data));
+        axios.get(`${API_BASE}/status`).then(res => {
+          setStatus(res.data);
+          // If stuck in planning for > 30s, show warning
+          if (res.data.status === "planning") {
+            if (!planningTimer) {
+              planningTimer = setTimeout(() => setPlanningStuck(true), 30000);
+            }
+          } else {
+            setPlanningStuck(false);
+            if (planningTimer) clearTimeout(planningTimer);
+          }
+        });
         axios.get(`${API_BASE}/logs`).then(res => setLogs(res.data.logs || []));
-        axios.get(`${API_BASE}/user_input`).then(res => setUserInput(res.data.user_input || ""));
+        axios.get(`${API_BASE}/user_input`).then(res => {
+          // Only update if not editing
+          if (!editingUserInput) setUserInput(res.data.user_input || "");
+        });
         setScreenshotUrl(`${API_BASE}/screenshot?${Date.now()}`); // bust cache
       };
       fetchStatus();
       const interval = setInterval(fetchStatus, 3000);
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+        if (planningTimer) clearTimeout(planningTimer);
+      };
     }
-  }, [fresh]);
+  }, [fresh]); // Only depends on fresh
 
   // On first load or after kill, clear all UI state except feedback/user input
   useEffect(() => {
@@ -60,6 +81,7 @@ function App() {
     setLoading(true);
     try {
       await axios.post(`${API_BASE}/user_input`, { user_input: userInput });
+      setEditingUserInput(false);
     } catch (e) {
       alert("Failed to send direction/feedback");
     }
@@ -84,6 +106,7 @@ function App() {
   };
 
   const killSwitch = async () => {
+    setKilling(true);
     setLoading(true);
     try {
       await axios.post(`${API_BASE}/kill`);
@@ -94,9 +117,11 @@ function App() {
       setLogsOpen(false);
       setUserInput("");
       setFresh(true);
+      setKilling(false);
       window.location.reload();
     } catch (e) {
       alert("Failed to kill/reset agent");
+      setKilling(false);
     }
     setLoading(false);
   };
@@ -114,24 +139,48 @@ function App() {
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4, background: '#f7f9fb', borderRadius: 3, boxShadow: 2, p: { xs: 1, sm: 3 } }}>
       <h1 style={{ textAlign: "center", fontWeight: 700, letterSpacing: 1, marginBottom: 24, color: '#1a237e' }}>Multimodal Agent Dashboard</h1>
-      <Box display="flex" justifyContent="center" mb={2} gap={2}>
-        <Button variant="contained" color="error" onClick={killSwitch} disabled={loading}>
-          Kill Switch (Full Reset)
-        </Button>
-        {(!fresh && (status.status === "completed" || status.status === "idle" || status.status === "aborted")) && (
-          <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading}>
+      {planningStuck ? (
+        <Box display="flex" flexDirection="column" alignItems="center" mb={2}>
+          <Box color="error.main" fontWeight={600} mb={1}>
+            Agent appears stuck in planning. This may be due to an LLM or parsing error.
+          </Box>
+          <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing} sx={{ mr: 1 }}>
             Reset Agent
           </Button>
-        )}
-      </Box>
-      <TaskInput task={task} setTask={setTask} submitTask={submitTask} loading={loading || (!fresh && !(status.status === "idle" || status.status === "completed" || status.status === "aborted"))}
+          <Button variant="contained" color="error" onClick={killSwitch} disabled={loading || killing}>
+            {killing ? "Killing agent..." : "Kill Switch (Full Reset)"}
+          </Button>
+        </Box>
+      ) : (
+        <Box display="flex" justifyContent="center" mb={2} gap={2}>
+          {/* Only show kill switch if not planningStuck */}
+          {!planningStuck && (
+            <Button variant="contained" color="error" onClick={killSwitch} disabled={loading || killing}>
+              {killing ? "Killing agent..." : "Kill Switch (Full Reset)"}
+            </Button>
+          )}
+          {(!fresh && (status.status === "completed" || status.status === "idle" || status.status === "aborted")) && (
+            <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing}>
+              Reset Agent
+            </Button>
+          )}
+        </Box>
+      )}
+      <TaskInput task={task} setTask={setTask} submitTask={submitTask} loading={loading || killing || (!fresh && !(status.status === "idle" || status.status === "completed" || status.status === "aborted"))}
       />
       <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={3} mb={3}>
         <Box flex={1} minWidth={0}>
           {!fresh && <StatusSummary status={status} />}
         </Box>
         <Box flex={1} minWidth={0}>
-          <UserInput userInput={userInput} setUserInput={setUserInput} submitUserInput={submitUserInput} loading={loading} />
+          <UserInput
+            userInput={userInput}
+            setUserInput={setUserInput}
+            submitUserInput={submitUserInput}
+            loading={loading || killing}
+            onFocus={() => setEditingUserInput(true)}
+            onBlur={() => setEditingUserInput(false)}
+          />
         </Box>
       </Box>
       <ScreenshotPanel screenshotUrl={screenshotUrl} />

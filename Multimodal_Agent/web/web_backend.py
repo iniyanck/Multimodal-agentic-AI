@@ -84,6 +84,8 @@ def set_user_input(req: UserInputRequest):
     user_input_path = os.path.join(os.path.dirname(__file__), "..", "user_input.txt")
     with open(user_input_path, "w", encoding="utf-8") as f:
         f.write(req.user_input.strip())
+    # Also process feedback in real time
+    agent.feedback_handler.receive_feedback(req.user_input.strip())
     return {"status": "written", "user_input": req.user_input}
 
 @app.get("/user_input")
@@ -103,7 +105,8 @@ def reset_agent():
         agent_thread.join(timeout=2)
         if agent_thread.is_alive():
             agent.agent_state["status"] = "aborted"
-            agent_thread = None
+        agent_thread = None
+    agent.stop_flag = False  # Reset stop flag after stopping
     agent.agent_state = agent.knowledge_base.load_agent_state() or {
         "status": "idle",
         "current_task": "None",
@@ -122,7 +125,8 @@ def kill_switch():
         agent_thread.join(timeout=2)
         if agent_thread.is_alive():
             agent.agent_state["status"] = "aborted"
-            agent_thread = None
+        agent_thread = None
+    agent.stop_flag = False  # Reset stop flag after stopping
     agent.agent_state = agent.knowledge_base.load_agent_state() or {
         "status": "idle",
         "current_task": "None",

@@ -1,7 +1,7 @@
 import React from "react";
 import { Card, CardContent, Typography, Box, TextField, Button } from "@mui/material";
 
-export default function UserInput({ userInput, setUserInput, submitUserInput, loading }) {
+export default function UserInput({ userInput, setUserInput, submitUserInput, loading, onFocus, onBlur }) {
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
@@ -15,6 +15,8 @@ export default function UserInput({ userInput, setUserInput, submitUserInput, lo
             disabled={loading}
             multiline
             minRows={2}
+            onFocus={onFocus}
+            onBlur={onBlur}
           />
           <Button variant="outlined" onClick={submitUserInput} disabled={loading}>
             Send
