@@ -38,6 +38,8 @@ class AgentCore:
         }
         self.logger = Logger()
         self.last_screenshot_pil = None
+        self.stop_flag = False  # Add stop flag
+        self.interactive = True  # Add interactive flag
 
     def _call_llm(self, prompt: str, image_data: bytes | None = None) -> str:
         """Calls the Large Language Model (LLM) with a prompt and optional image data."""
@@ -171,11 +173,8 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
         """Executes the action decided by the LLM and returns structured feedback."""
         action_type = parsed_action.get("action")
         feedback = {"status": "success", "message": "Action executed successfully.", "details": {}}
-
-        # Add a record to history for debugging and future context
         action_entry = {"timestamp": time.time(), "action": parsed_action}
         self.agent_state["history"].append(action_entry)
-
         try:
             if action_type == "read_file":
                 filename = parsed_action.get("file")
@@ -334,22 +333,28 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                     self.logger.warning(feedback["message"])
                     return feedback
                 self.logger.info("Task reported as complete by LLM.")
-                # Ask user for confirmation and feedback
-                print("\n--- Task Complete? ---")
-                user_confirm = input("Did the agent complete the task successfully? (yes/no): ").strip().lower()
-                if user_confirm not in ["yes", "y"]:
-                    feedback_msg = input("What could the agent have done better? (Your feedback will help improve future runs): ")
-                    # Store feedback in knowledge base with a timestamped key
-                    import datetime
-                    feedback_key = f"user_feedback_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    self.knowledge_base.store_knowledge(feedback_key, feedback_msg)
-                    feedback["status"] = "failure"
-                    feedback["message"] = "User indicated the task was not completed successfully. Feedback stored."
-                    feedback["details"]["user_feedback_key"] = feedback_key
-                    self.agent_state["status"] = "aborted"  # Mark as aborted to prevent further retries
+                # --- FIX: Handle interactive vs. non-interactive mode ---
+                if getattr(self, "interactive", True):
+                    print("\n--- Task Complete? ---")
+                    user_confirm = input("Did the agent complete the task successfully? (yes/no): ").strip().lower()
+                    if user_confirm not in ["yes", "y"]:
+                        feedback_msg = input("What could the agent have done better? (Your feedback will help improve future runs): ")
+                        import datetime
+                        feedback_key = f"user_feedback_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                        self.knowledge_base.store_knowledge(feedback_key, feedback_msg)
+                        feedback["status"] = "failure"
+                        feedback["message"] = "User indicated the task was not completed successfully. Feedback stored."
+                        feedback["details"]["user_feedback_key"] = feedback_key
+                        self.agent_state["status"] = "aborted"  # Mark as aborted to prevent further retries
+                    else:
+                        feedback["message"] = "Task completed successfully (user confirmed)."
+                        self.agent_state["status"] = "completed"
                 else:
-                    feedback["message"] = "Task completed successfully (user confirmed)."
+                    # Non-interactive mode: auto-complete
+                    feedback["message"] = "Task completed successfully (auto-confirmed in non-interactive mode)."
                     self.agent_state["status"] = "completed"
+                # --- END FIX ---
+                return feedback
             elif action_type == "resolve_special_folder":
                 folder_name = parsed_action.get("folder_name")
                 abs_path = resolve_special_folder(folder_name)
@@ -422,12 +427,20 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
         action_execution_retries = 0
 
         while True:
+            if self.stop_flag:
+                print("\n--- Agent stopped by kill/reset ---")
+                self.agent_state["status"] = "aborted"
+                break
+
             if total_steps >= MAX_TOTAL_STEPS:
                 print("\n--- Maximum step limit reached. Stopping agent to prevent runaway execution. ---")
                 self.logger.warning("Maximum step limit reached. Stopping agent.")
                 break
 
             if self.agent_state["status"] == "planning":
+                if self.stop_flag:
+                    self.agent_state["status"] = "aborted"
+                    break
                 print("\n--- Agent Planning ---")
                 current_context = self.global_prompt_manager.get_current_context(self.agent_state)
                 self.agent_state["current_plan"] = self._plan_task(self.agent_state["current_task"], current_context)
@@ -444,6 +457,9 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                     print(f"Agent has a plan with {len(self.agent_state['current_plan'])} steps.")
 
             elif self.agent_state["status"] == "executing_plan":
+                if self.stop_flag:
+                    self.agent_state["status"] = "aborted"
+                    break
                 if self.agent_state["plan_step"] >= len(self.agent_state["current_plan"]):
                     print("\n--- All steps in the current plan executed. Agent considering next steps or task completion. ---")
                     self.agent_state["status"] = "planning"
@@ -454,6 +470,10 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 # 1. Perception/Observation for this step
                 screenshot_path = "current_screen_step.png"
                 screen_image_bytes = self.screen_capture.capture_screen_bytes(screenshot_path)
+
+                if self.stop_flag:
+                    self.agent_state["status"] = "aborted"
+                    break
 
                 # Gather user feedback
                 latest_feedback = self.feedback_handler.get_latest_feedback()
@@ -474,9 +494,17 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                     history=self.agent_state["history"]
                 )
 
+                if self.stop_flag:
+                    self.agent_state["status"] = "aborted"
+                    break
+
                 # 2. Reasoning (LLM Call to get specific action parameters)
                 llm_response_text = self._call_llm(action_prompt, image_data=screen_image_bytes)
                 parsed_action = self._parse_llm_response(llm_response_text)
+
+                if self.stop_flag:
+                    self.agent_state["status"] = "aborted"
+                    break
 
                 if parsed_action.get("action") == "unknown":
                     parse_failures += 1
@@ -502,6 +530,10 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 action_result_feedback = self._execute_action(parsed_action) # This now returns a dict
                 print(f"Action Result: {action_result_feedback['status'].upper()} - {action_result_feedback['message']}")
 
+                if self.stop_flag:
+                    self.agent_state["status"] = "aborted"
+                    break
+
                 # 4. Reflection and Confirmation (New Step)
                 # After executing an action, prompt the LLM to reflect on its success
                 reflection_prompt = self.global_prompt_manager.get_reflection_prompt(
@@ -515,6 +547,10 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 print("\n--- Agent Reflecting on Action Outcome ---")
                 reflection_llm_response = self._call_llm(reflection_prompt, image_data=screen_image_bytes) # Pass screenshot again for reflection
                 reflection_parsed = self._parse_llm_response(reflection_llm_response)
+
+                if self.stop_flag:
+                    self.agent_state["status"] = "aborted"
+                    break
 
                 action_successful_in_reflection = reflection_parsed.get("status") == "success"
                 reflection_thought = reflection_parsed.get("thought", "No specific reflection thought provided.")
@@ -550,10 +586,15 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
             if self.agent_state["status"] == "completed":
                 print("\n--- Agent finished its task. ---")
                 self.self_evaluate_task()  # Automated self-evaluation after task completion
+                self.agent_state["status"] = "idle"  # Set to idle after completion
                 break
 
             # Small delay to prevent rapid-fire actions and allow observation
             time.sleep(1)
+
+            if self.stop_flag:
+                self.agent_state["status"] = "aborted"
+                break
 
     def self_evaluate_task(self):
         """Prompts the LLM to critique the agent's overall performance after task completion."""

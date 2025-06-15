@@ -1,15 +1,12 @@
 # main.py
 
-import os
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from dotenv import load_dotenv
 from typing import Optional
-import threading
 import time
-
-# Add the parent directory to the system path to allow for relative imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'agent_ai')))
-
 from agent_ai.core.agent_core import AgentCore
 import google.generativeai as genai
 
@@ -24,9 +21,6 @@ def check_for_user_input(last_seen: float) -> Optional[str]:
                 content = f.read().strip()
             return content, mtime
     return None, last_seen
-
-# Patch AgentCore to support async user input
-from agent_ai.core.agent_core import AgentCore
 
 def run_agent_with_async_input(agent: AgentCore, initial_task: str):
     last_seen = 0.0
