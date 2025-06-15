@@ -1,4 +1,6 @@
-# agent_ai/action/system_interaction.py
+"""
+SystemInteraction class for automating system-level actions (mouse, keyboard, shell, etc.).
+"""
 
 import pyautogui
 import time
@@ -8,12 +10,11 @@ from ..utils.window_utils import focus_window
 from ..utils.platform_utils import is_windows, is_mac, is_linux
 
 class SystemInteraction:
+    """Automates system-level actions for the agent."""
     def __init__(self):
-        """Initializes SystemInteraction and sets up PyAutoGUI failsafe."""
-        pyautogui.FAILSAFE = True # Enable failsafe to prevent runaway scripts (move mouse to top-left corner)
+        pyautogui.FAILSAFE = True
         self.logger = Logger()
 
-    # --- PyAutoGUI functions ---
     def move_mouse(self, x: int, y: int, duration: float = 0.5):
         """Moves the mouse cursor to absolute coordinates."""
         print(f"Moving mouse to ({x}, {y})")
@@ -42,14 +43,11 @@ class SystemInteraction:
         """Presses a combination of keys (e.g., 'ctrl', 'c')."""
         print(f"Pressing hotkey: {args}")
         pyautogui.hotkey(*args)
-    
+
     def execute_shell_command(self, command: str, background: bool = False) -> tuple[int, str, str]:
         """Executes a shell command. If background=True, runs non-blocking and returns immediately. Platform-aware."""
         self.logger.info(f"Executing shell command: '{command}' (background={background})")
-        if is_windows():
-            shell = True
-        else:
-            shell = False
+        shell = is_windows()
         try:
             if background:
                 process = subprocess.Popen(command, shell=shell)
@@ -59,15 +57,9 @@ class SystemInteraction:
                 process = subprocess.run(command, shell=shell, capture_output=True, text=True, check=False)
                 self.logger.info(f"Command '{command}' executed. Stdout: {process.stdout.strip()}")
                 return process.returncode, process.stdout, process.stderr
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Command '{command}' failed with exit code {e.returncode}. Stderr: {e.stderr.strip()}", exc_info=True)
-            return e.returncode, e.stdout, e.stderr
-        except FileNotFoundError:
-            self.logger.error(f"Command not found: '{command}'. Ensure it's in your system's PATH.", exc_info=True)
-            return -1, "", "Command not found"
         except Exception as e:
-            self.logger.error(f"Unexpected error executing command '{command}': {e}", exc_info=True)
-            return -1, "", str(e)
+            self.logger.error(f"Error executing shell command '{command}': {e}", exc_info=True)
+            return 1, "", str(e)
 
     def focus_window(self, title_substring: str, timeout: float = 5.0) -> bool:
         """Focuses a window whose title contains the given substring. Only works on Windows."""

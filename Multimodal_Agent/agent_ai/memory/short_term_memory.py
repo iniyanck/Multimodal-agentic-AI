@@ -1,6 +1,9 @@
-# agent_ai/memory/short_term_memory.py
+"""
+ShortTermMemory class for managing recent events in agent memory.
+"""
 
 class ShortTermMemory:
+    """Implements a simple buffer for short-term memory events."""
     def __init__(self, max_size: int = 10):
         """Initializes short-term memory with a buffer of limited size."""
         from ..utils.logger import Logger

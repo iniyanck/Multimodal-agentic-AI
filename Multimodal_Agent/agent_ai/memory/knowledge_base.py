@@ -1,8 +1,11 @@
-# agent_ai/memory/knowledge_base.py
+"""
+KnowledgeBase manages the storage and retrieval of agent knowledge and state using a SQLite database.
+"""
 
 import sqlite3
 import json
 import os
+
 
 class KnowledgeBase:
     """KnowledgeBase manages the storage and retrieval of agent knowledge and state using a SQLite database."""
@@ -10,6 +13,7 @@ class KnowledgeBase:
     def __init__(self, db_name: str = "agent_knowledge.db"):
         """Initializes the knowledge base with a SQLite database."""
         from ..utils.logger import Logger
+
         self.logger = Logger()
         self.db_path = os.path.join(os.path.dirname(__file__), db_name)
         self._initialize_db()
@@ -20,20 +24,24 @@ class KnowledgeBase:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS knowledge (
                     key TEXT PRIMARY KEY,
                     value TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
-            cursor.execute("""
+                """
+            )
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS agent_state (
                     id INTEGER PRIMARY KEY,
                     state_data TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
+                """
+            )
             conn.commit()
             self.logger.info(f"KnowledgeBase initialized at {self.db_path}")
         except sqlite3.Error as e:
@@ -48,7 +56,9 @@ class KnowledgeBase:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("INSERT OR REPLACE INTO knowledge (key, value) VALUES (?, ?)", (key, value))
+            cursor.execute(
+                "INSERT OR REPLACE INTO knowledge (key, value) VALUES (?, ?)", (key, value)
+            )
             conn.commit()
             self.logger.info(f"Stored knowledge: {key} = {value[:50]}...")
             return True
@@ -135,22 +145,23 @@ class KnowledgeBase:
             if conn:
                 conn.close()
 
+
 # Example Usage
 if __name__ == "__main__":
     kb = KnowledgeBase(db_name="test_agent_knowledge.db")
-    
+
     kb.store_knowledge("favorite_color", "blue")
     kb.store_knowledge("api_key_service_x", "sk-12345abcdef")
-    
+
     print(f"Retrieved favorite color: {kb.retrieve_knowledge('favorite_color')}")
     print(f"Retrieved non-existent key: {kb.retrieve_knowledge('non_existent_key')}")
-    
+
     agent_current_state = {"last_action": "read file", "current_task": "analyze data"}
     kb.store_agent_state(agent_current_state)
-    
+
     loaded_state = kb.load_agent_state()
     if loaded_state:
         print(f"Loaded agent state: {loaded_state}")
-    
+
     kb.delete_knowledge("favorite_color")
     print(f"Retrieved favorite color after deletion: {kb.retrieve_knowledge('favorite_color')}")

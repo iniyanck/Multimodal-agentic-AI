@@ -3,13 +3,20 @@
 Utility functions for window management (focus, list, etc.) on Windows.
 Requires: pygetwindow (pip install pygetwindow)
 """
+
 import time
 import pygetwindow as gw
 
 def focus_window(title_substring: str, timeout: float = 5.0) -> bool:
     """
     Focuses the first window whose title contains the given substring.
-    Returns True if successful, False otherwise.
+
+    Args:
+        title_substring (str): The substring to search for in the window title.
+        timeout (float, optional): The time in seconds to wait for the window to appear. Defaults to 5.0.
+
+    Returns:
+        bool: True if the window was successfully focused, False otherwise.
     """
     end_time = time.time() + timeout
     while time.time() < end_time:

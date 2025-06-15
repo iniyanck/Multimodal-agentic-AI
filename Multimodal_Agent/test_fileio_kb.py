@@ -6,10 +6,14 @@ from agent_ai.perception.file_io import FileIO
 from agent_ai.memory.knowledge_base import KnowledgeBase
 
 class FileIOTest(unittest.TestCase):
+    """Unit tests for FileIO class."""
     def setUp(self):
         self.file_io = FileIO()
         self.test_filename = "test_file.txt"
         self.test_content = "Hello, world!"
+        # Ensure file does not exist before test
+        if os.path.exists(self.test_filename):
+            os.remove(self.test_filename)
 
     def tearDown(self):
         if os.path.exists(self.test_filename):
@@ -21,17 +25,23 @@ class FileIOTest(unittest.TestCase):
         self.assertEqual(content, self.test_content)
 
     def test_list_directory(self):
+        self.file_io.write_file(self.test_filename, self.test_content)
         files = self.file_io.list_directory('.')
         self.assertIsInstance(files, list)
         self.assertIn(self.test_filename, files)
 
 class KnowledgeBaseTest(unittest.TestCase):
+    """Unit tests for KnowledgeBase class."""
     def setUp(self):
-        self.kb = KnowledgeBase(db_name="test_agent_knowledge.db")
+        self.db_name = "test_agent_knowledge.db"
+        self.kb = KnowledgeBase(db_name=self.db_name)
+        self.db_path = os.path.join(os.path.dirname(__file__), 'agent_ai', 'memory', self.db_name)
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
 
     def tearDown(self):
-        if os.path.exists(os.path.join(os.path.dirname(__file__), 'agent_ai', 'memory', 'test_agent_knowledge.db')):
-            os.remove(os.path.join(os.path.dirname(__file__), 'agent_ai', 'memory', 'test_agent_knowledge.db'))
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
 
     def test_store_and_retrieve_knowledge(self):
         self.assertTrue(self.kb.store_knowledge("foo", "bar"))

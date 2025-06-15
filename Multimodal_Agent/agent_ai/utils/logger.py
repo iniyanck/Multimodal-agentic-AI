@@ -1,15 +1,17 @@
-# agent_ai/utils/logger.py
+"""
+Logger class for logging messages to file and console.
+"""
 
 import logging
 import os
 
 class Logger:
     """Logger class for logging messages to file and console."""
-    _initialized = False # Class-level flag
+    _initialized = False
 
     def __init__(self, log_file: str = "agent.log", level=logging.INFO):
         """Initializes the logger, sets up file and console handlers."""
-        if not Logger._initialized: # Only run basicConfig once
+        if not Logger._initialized:
             log_dir = os.path.join(os.path.dirname(__file__), '..', 'logs')
             os.makedirs(log_dir, exist_ok=True)
             self.log_filepath = os.path.join(log_dir, log_file)
@@ -32,8 +34,6 @@ class Logger:
             self.logger.info("Agent Logger initialized.")
         else:
             self.logger = logging.getLogger(__name__) # Just get the existing logger instance
-            # You could log a debug message here if you want to know it's being "re-got"
-            # self.logger.debug("Logger already initialized, reusing existing instance.")
 
     def info(self, message: str, *args, **kwargs):
         """Logs an informational message."""

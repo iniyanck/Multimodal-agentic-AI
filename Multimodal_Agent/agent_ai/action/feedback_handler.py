@@ -1,8 +1,12 @@
 # agent_ai/action/feedback_handler.py
 
+"""
+FeedbackHandler class for managing agent feedback and user input.
+"""
+
 class FeedbackHandler:
+    """Handles feedback queue and user input for the agent."""
     def __init__(self):
-        """Initializes the feedback handler with an empty queue."""
         from ..utils.logger import Logger
         self.logger = Logger()
         self.feedback_queue = []
@@ -25,20 +29,13 @@ class FeedbackHandler:
         return feedback
 
     def process_feedback(self, agent_state: dict, feedback: str) -> dict:
-        """
-        Processes feedback and updates the agent's internal state or understanding.
-        This is where your agent's reasoning about feedback will go.
-        For now, it's a placeholder.
-        """
+        """Processes feedback and updates the agent's internal state or understanding."""
         self.logger.info(f"Processing feedback: '{feedback}' for agent state.")
         agent_state["last_feedback"] = feedback
         return agent_state
 
     def ask_user_for_input(self, question: str) -> str:
-        """
-        Asks the user a question and returns their input.
-        This is a blocking call for user interaction.
-        """
+        """Asks the user a question and returns their input."""
         print(f"\n--- Agent needs input ---")
         print(f"Agent Question: {question}")
         user_input = input("Your response: ")

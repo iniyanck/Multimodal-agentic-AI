@@ -1,16 +1,22 @@
-# agent_ai/core/global_prompt.py (Conceptual changes)
+"""
+GlobalPrompt class for generating prompts for LLM planning and action execution.
+"""
 import json
 
 class GlobalPrompt:
+    """Manages prompt templates for planning and action execution."""
     def __init__(self):
-        """Initializes the global prompt manager with base instructions."""
-        self.base_instruction = "You are an AI agent designed to interact with a computer system. Your goal is to accurately understand and execute user tasks."
+        self.base_instruction = (
+            "You are an AI agent designed to interact with a computer system. "
+            "Your goal is to accurately understand and execute user tasks."
+        )
 
     def get_planning_prompt(self, task_description: str, current_context: str, tools_description: str, history: list) -> str:
-        """
-        Generates a prompt for the LLM to create a plan.
-        """
-        history_str = "\n".join([f"- {entry['action']['action']} (Result: {entry.get('feedback', 'No feedback')})" for entry in history[-5:]]) # Last 5 entries
+        """Generates a prompt for the LLM to create a plan."""
+        history_str = "\n".join([
+            f"- {entry['action']['action']} (Result: {entry.get('feedback', 'No feedback')})"
+            for entry in history[-5:]
+        ])
         return f"""
         {self.base_instruction}
 
@@ -43,10 +49,11 @@ class GlobalPrompt:
         """
 
     def get_action_execution_prompt(self, current_task_description: str, current_plan_step: dict, last_action_feedback: str, last_read_content: str, last_directory_list: str, last_retrieved_knowledge: str, history: list) -> str:
-        """
-        Generates a prompt for the LLM to decide on specific parameters for the current action.
-        """
-        history_str = "\n".join([f"- {entry['action']['action']} (Result: {entry.get('feedback', 'No feedback')})" for entry in history[-5:]]) # Last 5 entries
+        """Generates a prompt for the LLM to decide on specific parameters for the current action."""
+        history_str = "\n".join([
+            f"- {entry['action']['action']} (Result: {entry.get('feedback', 'No feedback')})"
+            for entry in history[-5:]
+        ])
         return f"""
         {self.base_instruction}
 
@@ -131,3 +138,41 @@ class GlobalPrompt:
             context.append(f"Last retrieved knowledge: {agent_state['last_retrieved_knowledge']}")
         # You could also add information about the current screenshot, if parsed.
         return "\n".join(context) if context else "No specific observations yet."
+
+    def get_self_evaluation_prompt(self, current_task: str, history: list, final_state: dict) -> str:
+        """
+        Generates a prompt for the LLM to critique the agent's overall performance after task completion.
+        """
+        history_str = "\n".join([
+            f"- {entry['action']['action']} (Result: {entry['action'].get('status', 'unknown')})" for entry in history[-10:]
+        ])
+        return f"""
+        {self.base_instruction}
+
+        The task has been completed. Please provide a critical self-evaluation of your performance on the following task:
+        Task: \"{current_task}\\"
+
+        Recent Action History (last 10 steps):
+        {history_str if history_str else 'No recent history.'}
+
+        Final Agent State:
+        {json.dumps(final_state, indent=2)}
+
+        Please answer the following:
+        - Did you accomplish the task successfully? Why or why not?
+        - What went well, and what could be improved?
+        - Were there any mistakes, inefficiencies, or unnecessary steps?
+        - What would you do differently next time?
+        - Give yourself a score from 1 (poor) to 10 (excellent) for this episode.
+
+        Output ONLY a JSON object with keys: 'success' (true/false), 'score' (1-10), 'strengths', 'weaknesses', 'improvements', and 'summary'.
+        Example:
+        {{
+            "success": true,
+            "score": 8,
+            "strengths": "Clear planning and correct execution.",
+            "weaknesses": "One unnecessary directory listing step.",
+            "improvements": "Be more concise in planning.",
+            "summary": "The agent completed the task with minor inefficiencies."
+        }}
+        """

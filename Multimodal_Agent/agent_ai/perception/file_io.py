@@ -1,13 +1,15 @@
-# agent_ai/perception/file_io.py
+"""
+FileIO class for file operations with logging and error handling.
+"""
 
 import os
-from ..utils.logger import Logger # Import Logger
+from ..utils.logger import Logger
 
 class FileIO:
+    """Handles file reading, writing, and directory listing with logging."""
     def __init__(self, base_path: str = "."):
-        """Initializes FileIO with a base path for file operations."""
         self.base_path = base_path
-        self.logger = Logger() # Initialize Logger
+        self.logger = Logger()
 
     def read_file(self, filename: str) -> str | None:
         """Reads the content of a specified file. Designed for text files."""

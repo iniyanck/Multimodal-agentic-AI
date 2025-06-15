@@ -1,5 +1,6 @@
-# agent_ai/core/agent_core.py
-
+"""
+AgentCore class: main orchestrator for agent perception, memory, planning, and action.
+"""
 from ..perception.file_io import FileIO
 from ..perception.screen_capture import ScreenCapture
 from ..action.system_interaction import SystemInteraction
@@ -7,16 +8,18 @@ from ..action.feedback_handler import FeedbackHandler
 from ..memory.knowledge_base import KnowledgeBase
 from ..core.global_prompt import GlobalPrompt
 from ..utils.platform_utils import is_windows, is_mac, is_linux, get_platform_name
+from ..utils.path_utils import resolve_special_folder
 import time
 import json
 import io
 import base64
-from PIL import Image # Import PIL for image handling
+from PIL import Image
 from ..utils.logger import Logger
+from ..action.web_search import web_search
 
 class AgentCore:
+    """Main orchestrator for agent perception, memory, planning, and action."""
     def __init__(self, llm_client=None):
-        """Initializes the core agent with all subsystems and state."""
         self.file_io = FileIO()
         self.screen_capture = ScreenCapture()
         self.system_interaction = SystemInteraction()
@@ -24,7 +27,13 @@ class AgentCore:
         self.knowledge_base = KnowledgeBase()
         self.global_prompt_manager = GlobalPrompt()
         self.llm_client = llm_client
-        self.agent_state = self.knowledge_base.load_agent_state() or {"status": "idle", "current_task": "None", "history": [], "current_plan": [], "plan_step": 0}
+        self.agent_state = self.knowledge_base.load_agent_state() or {
+            "status": "idle",
+            "current_task": "None",
+            "history": [],
+            "current_plan": [],
+            "plan_step": 0
+        }
         self.logger = Logger()
         self.last_screenshot_pil = None
 
@@ -92,26 +101,48 @@ class AgentCore:
             return {"action": "unknown", "error": f"Unexpected parsing error: {e}"}
 
     def _get_available_tools_description(self) -> str:
-        """Generates a string describing the available tools for the LLM, with platform notes."""
+        """Generates a string describing the available tools for the LLM, with platform notes and usage examples."""
         platform_note = f"(Current platform: {get_platform_name()})"
         tools_description = f"""
 Available Tools and their usage {platform_note} (output ONLY a JSON object with 'action' and parameters):
+
 - read_file(file: str): Reads the content of a specified file.
+  Example: {{"action": "read_file", "file": "README.md"}}
 - write_file(file: str, content: str): Writes content to a specified file.
-- execute_shell_command(command: str, background: bool = False): Executes a shell command. If launching a GUI app (like notepad, paint, etc.), set background=true to avoid blocking. If background=True, runs non-blocking and returns immediately. (Platform-aware)
+  Example: {{"action": "write_file", "file": "output.txt", "content": "Hello!"}}
+- execute_shell_command(command: str, background: bool = False): Executes a shell command. If launching a GUI app, set background=true. Example: {{"action": "execute_shell_command", "command": "notepad", "background": true}}
 - focus_window(title_substring: str): Focuses a window whose title contains the given substring. (Windows only)
+  Example: {{"action": "focus_window", "title_substring": "Notepad"}}
 - list_directory(path: str = "."): Lists the contents of a directory.
+  Example: {{"action": "list_directory", "path": "."}}
 - capture_screen(file: str): Captures the current screen and saves it. Use this to get visual context.
+  Example: {{"action": "capture_screen", "file": "screen.png"}}
 - move_mouse(x: int, y: int): Moves the mouse to absolute screen coordinates.
+  Example: {{"action": "move_mouse", "x": 100, "y": 200}}
 - click(x: int = -1, y: int = -1, button: str = "left"): Clicks at a specified position or current position.
+  Example: {{"action": "click", "x": 100, "y": 200, "button": "left"}}
 - type_text(text: str): Types the given text.
+  Example: {{"action": "type_text", "text": "Hello world!"}}
 - press_key(key: str): Presses a single keyboard key.
+  Example: {{"action": "press_key", "key": "enter"}}
 - hotkey(keys: str): Presses a combination of keys (e.g., "ctrl+c").
+  Example: {{"action": "hotkey", "keys": "ctrl+c"}}
 - store_knowledge(key: str, value: str): Stores information in the agent's knowledge base.
+  Example: {{"action": "store_knowledge", "key": "last_app", "value": "notepad"}}
 - retrieve_knowledge(key: str): Retrieves information from the agent's knowledge base.
+  Example: {{"action": "retrieve_knowledge", "key": "last_app"}}
 - ask_user(question: str): Asks the user a question and waits for a response.
+  Example: {{"action": "ask_user", "question": "What should I do next?"}}
 - wait(duration: int): Pauses agent execution for a specified number of seconds.
+  Example: {{"action": "wait", "duration": 3}}
+- decompose_subtask(subtask_description: str): If a step is too complex, break it down into a new plan and execute recursively.
+  Example: {{"action": "decompose_subtask", "subtask_description": "Draw a circle in Paint"}}
 - task_complete: Indicates that the current overall task is finished.
+  Example: {{"action": "task_complete"}}
+- resolve_special_folder(folder_name: str): Resolves the absolute path of a special folder (like 'videos', 'documents', 'desktop', etc.) in a platform-agnostic way. Use this to get the correct path for any user folder.
+  Example: {{"action": "resolve_special_folder", "folder_name": "videos"}}
+- web_search(query: str, num_results: int = 3): Performs a web search and returns a summary of the top results.
+  Example: {{"action": "web_search", "query": "latest AI news", "num_results": 2}}
 """
         return tools_description
 
@@ -289,6 +320,24 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 else:
                     feedback["message"] = "Task completed successfully (user confirmed)."
                     self.agent_state["status"] = "completed"
+            elif action_type == "resolve_special_folder":
+                folder_name = parsed_action.get("folder_name")
+                abs_path = resolve_special_folder(folder_name)
+                feedback["details"]["folder_name"] = folder_name
+                feedback["details"]["absolute_path"] = abs_path
+                if abs_path:
+                    feedback["status"] = "success"
+                    feedback["message"] = f"Resolved absolute path: {abs_path}"
+                else:
+                    feedback["status"] = "failure"
+                    feedback["message"] = f"Could not resolve absolute path for '{folder_name}'."
+            elif action_type == "web_search":
+                query = parsed_action.get("query")
+                num_results = int(parsed_action.get("num_results", 3))
+                summary = web_search(query, num_results)
+                feedback["details"]["query"] = query
+                feedback["details"]["summary"] = summary
+                feedback["message"] = f"Web search completed for query: '{query}'"
             else:
                 feedback["status"] = "failure"
                 feedback["message"] = f"Unknown action: {action_type}. Please refine the LLM's output."
@@ -304,12 +353,37 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
         self.knowledge_base.store_agent_state(self.agent_state)
         return feedback
 
+    def _execute_subplan(self, subtask_description: str, parent_context: str = "") -> bool:
+        """Recursively plan and execute a subtask. Returns True if successful."""
+        print(f"\n--- Decomposing subtask: {subtask_description} ---")
+        subplan = self._plan_task(subtask_description, parent_context)
+        if not subplan:
+            self.logger.error(f"Failed to generate subplan for subtask: {subtask_description}")
+            return False
+        for step in subplan:
+            print(f"\n[Subtask] Executing: {step.get('description', step.get('action'))}")
+            parsed_action = step
+            if parsed_action.get('action') == 'decompose_subtask':
+                # Recursively decompose further
+                nested_desc = parsed_action.get('subtask_description', 'No description provided')
+                if not self._execute_subplan(nested_desc, parent_context):
+                    return False
+            else:
+                feedback = self._execute_action(parsed_action)
+                if feedback.get('status') != 'success':
+                    print(f"[Subtask] Step failed: {feedback.get('message')}")
+                    return False
+        print(f"--- Subtask '{subtask_description}' completed ---")
+        return True
+
     def run_agent(self, initial_task: str):
-        """The main agentic loop with planning and execution."""
+        """The main agentic loop with planning and execution, now with recursive subtask decomposition and step/iteration limits."""
         self.agent_state["current_task"] = initial_task
         self.agent_state["status"] = "planning" # Initial status
         print(f"\n--- Starting Agent ---")
         print(f"Initial Task: {initial_task}")
+        MAX_TOTAL_STEPS = 50
+        total_steps = 0
 
         MAX_PARSE_RETRIES = 3
         parse_failures = 0
@@ -318,12 +392,18 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
         action_execution_retries = 0
 
         while True:
+            if total_steps >= MAX_TOTAL_STEPS:
+                print("\n--- Maximum step limit reached. Stopping agent to prevent runaway execution. ---")
+                self.logger.warning("Maximum step limit reached. Stopping agent.")
+                break
+
             if self.agent_state["status"] == "planning":
                 print("\n--- Agent Planning ---")
                 current_context = self.global_prompt_manager.get_current_context(self.agent_state)
                 self.agent_state["current_plan"] = self._plan_task(self.agent_state["current_task"], current_context)
                 self.agent_state["plan_step"] = 0
                 action_execution_retries = 0 # Reset retries for new plan
+                total_steps += 1
 
                 if not self.agent_state["current_plan"]:
                     self.logger.error("Failed to generate a plan. Halting agent.")
@@ -336,12 +416,10 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
             elif self.agent_state["status"] == "executing_plan":
                 if self.agent_state["plan_step"] >= len(self.agent_state["current_plan"]):
                     print("\n--- All steps in the current plan executed. Agent considering next steps or task completion. ---")
-                    # If all steps completed, transition to planning to allow LLM to decide if task is truly complete
                     self.agent_state["status"] = "planning"
-                    continue # Go back to the top of the loop for planning
-
+                    continue
                 current_step = self.agent_state["current_plan"][self.agent_state["plan_step"]]
-                print(f"\n--- Executing Plan Step {self.agent_state['plan_step'] + 1}/{len(self.agent_state['current_plan'])}: {current_step.get('description', current_step.get('action'))} ---")
+                # Removed user confirmation for risky actions; proceed automatically
 
                 # 1. Perception/Observation for this step
                 screenshot_path = "current_screen_step.png"
@@ -352,12 +430,8 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 if latest_feedback:
                     print(f"\nReceived user feedback: {latest_feedback}")
                     self.agent_state = self.feedback_handler.process_feedback(self.agent_state, latest_feedback)
-                    # If user feedback significantly changes context, might want to re-plan
-                    # self.agent_state["status"] = "planning"
-                    # continue
 
                 # Construct LLM Prompt for action execution (now it's more about refining the current step)
-                # Pass structured feedback to LLM
                 last_action_feedback_str = json.dumps(self.agent_state.get('last_action_feedback', {"status": "none", "message": "No previous action feedback."}))
 
                 action_prompt = self.global_prompt_manager.get_action_execution_prompt(
@@ -445,10 +519,32 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
 
             if self.agent_state["status"] == "completed":
                 print("\n--- Agent finished its task. ---")
+                self.self_evaluate_task()  # Automated self-evaluation after task completion
                 break
 
             # Small delay to prevent rapid-fire actions and allow observation
             time.sleep(1)
+
+    def self_evaluate_task(self):
+        """Prompts the LLM to critique the agent's overall performance after task completion."""
+        evaluation_prompt = self.global_prompt_manager.get_self_evaluation_prompt(
+            current_task=self.agent_state["current_task"],
+            history=self.agent_state["history"],
+            final_state=self.agent_state
+        )
+        self.logger.info("Agent performing self-evaluation of completed task.")
+        llm_response = self._call_llm(evaluation_prompt)
+        try:
+            evaluation = json.loads(llm_response)
+        except Exception:
+            evaluation = {"raw_response": llm_response}
+        self.logger.info(f"Self-evaluation: {evaluation}")
+        # Store in knowledge base for future reference
+        self.knowledge_base.store_knowledge(
+            key=f"self_evaluation_{int(time.time())}",
+            value=json.dumps(evaluation)
+        )
+        print(f"\n--- Agent Self-Evaluation ---\n{evaluation}\n")
 
 # Example Usage (requires an LLM client setup, e.g., using Google Gemini)
 if __name__ == "__main__":

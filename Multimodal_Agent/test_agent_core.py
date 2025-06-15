@@ -1,4 +1,6 @@
-# Basic smoke test for AgentCore
+"""
+Basic smoke tests for AgentCore.
+"""
 import sys
 import os
 import unittest
@@ -7,9 +9,12 @@ from agent_ai.core.agent_core import AgentCore
 
 class MockLLMClient:
     def generate_content(self, contents, generation_config):
-        return type('obj', (object,), {'text': '{"action": "task_complete"}'})
+        class Response:
+            text = '{"action": "task_complete"}'
+        return Response()
 
 class AgentCoreTest(unittest.TestCase):
+    """Unit tests for AgentCore class."""
     def test_agent_init(self):
         agent = AgentCore(llm_client=MockLLMClient())
         self.assertIsNotNone(agent)
