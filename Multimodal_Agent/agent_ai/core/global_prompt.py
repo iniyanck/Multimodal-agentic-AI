@@ -36,6 +36,8 @@ class GlobalPrompt:
 
         Based on the task and available tools, provide a plan as a JSON array of objects. Each object in the array should represent a step in your plan and *must* have an "action" key (the name of the tool to use) and a "description" key. You can also include other parameters for the action if you know them (e.g., "file" for "read_file"). The "action" key must directly map to one of the available tools.
 
+        Note: You should use your own perception and reasoning to select files or resources, not just rely on exact user input. For example, if the user says "play the holiday video" and you see files in the directory with names containing "holiday", you should select the best match automatically. Only ask the user for clarification if there are multiple ambiguous matches or no clear candidate.
+
         Example Plan Structure:
         {{
             "plan": [

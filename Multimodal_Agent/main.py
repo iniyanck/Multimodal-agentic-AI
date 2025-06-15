@@ -4,12 +4,39 @@ import os
 import sys
 from dotenv import load_dotenv
 from typing import Optional
+import threading
+import time
 
 # Add the parent directory to the system path to allow for relative imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'agent_ai')))
 
 from agent_ai.core.agent_core import AgentCore
 import google.generativeai as genai
+
+USER_INPUT_FILE = os.path.join(os.path.dirname(__file__), 'user_input.txt')
+
+def check_for_user_input(last_seen: float) -> Optional[str]:
+    """Check if user_input.txt has been updated. Returns new input if found."""
+    if os.path.exists(USER_INPUT_FILE):
+        mtime = os.path.getmtime(USER_INPUT_FILE)
+        if mtime > last_seen:
+            with open(USER_INPUT_FILE, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            return content, mtime
+    return None, last_seen
+
+# Patch AgentCore to support async user input
+from agent_ai.core.agent_core import AgentCore
+
+def run_agent_with_async_input(agent: AgentCore, initial_task: str):
+    last_seen = 0.0
+    agent.run_agent(initial_task)
+    while True:
+        user_input, last_seen = check_for_user_input(last_seen)
+        if user_input:
+            print(f"\n[Async User Input Detected]: {user_input}")
+            agent.run_agent(user_input)
+        time.sleep(2)  # Check every 2 seconds
 
 def main() -> None:
     """Entry point for the Multimodal Agent. Loads environment, configures LLM, and starts the agent."""
@@ -40,7 +67,8 @@ def main() -> None:
     agent = AgentCore(llm_client=llm_client)
 
     initial_task = input("Enter the initial task for the AI agent: ")
-    agent.run_agent(initial_task)
+    print(f"You can asynchronously redirect the agent by editing 'user_input.txt' in this folder.")
+    run_agent_with_async_input(agent, initial_task)
 
 if __name__ == "__main__":
     main()

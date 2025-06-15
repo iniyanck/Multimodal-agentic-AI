@@ -9,6 +9,7 @@ from ..memory.knowledge_base import KnowledgeBase
 from ..core.global_prompt import GlobalPrompt
 from ..utils.platform_utils import is_windows, is_mac, is_linux, get_platform_name
 from ..utils.path_utils import resolve_special_folder
+from ..utils.file_search import find_video_files_by_keyword
 import time
 import json
 import io
@@ -16,6 +17,7 @@ import base64
 from PIL import Image
 from ..utils.logger import Logger
 from ..action.web_search import web_search
+import os
 
 class AgentCore:
     """Main orchestrator for agent perception, memory, planning, and action."""
@@ -195,8 +197,24 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                     feedback["message"] = f"Failed to write to {filename}."
             elif action_type == "execute_shell_command":
                 command = parsed_action.get("command")
+                # Heuristic: If command is to play a video and user gave a keyword, search for best match
+                if command and ("play" in self.agent_state["current_task"].lower() or "video" in self.agent_state["current_task"].lower()):
+                    import re
+                    # Try to extract a keyword from the command or user task
+                    user_keywords = re.findall(r"[\w-]+", self.agent_state["current_task"])
+                    video_dir = os.path.expanduser(parsed_action.get("cwd", os.path.expanduser("~")))
+                    # Look for a videos folder in the path or use default
+                    if "videos" in video_dir.lower() or os.path.exists(os.path.join(os.path.expanduser("~"), "Videos")):
+                        video_dir = os.path.join(os.path.expanduser("~"), "Videos")
+                    # Try to find a matching video file
+                    for keyword in user_keywords:
+                        matches = find_video_files_by_keyword(video_dir, keyword)
+                        if matches:
+                            # Use the first/best match
+                            command = f'start "" "{os.path.join(video_dir, matches[0])}"'
+                            feedback["details"]["matched_file"] = matches[0]
+                            break
                 background = parsed_action.get("background", False)
-                # Remove GUI keyword heuristic; rely on LLM to set background
                 if command:
                     return_code, stdout, stderr = self.system_interaction.execute_shell_command(command, background=background)
                     feedback["details"]["command"] = command
@@ -304,6 +322,12 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 time.sleep(duration)
                 feedback["details"]["duration"] = duration
             elif action_type == "task_complete":
+                # Prevent repeated user feedback loops
+                if self.agent_state.get("status") == "aborted":
+                    feedback["status"] = "failure"
+                    feedback["message"] = "Task previously marked as failed by user. Aborting further completion attempts."
+                    self.logger.warning(feedback["message"])
+                    return feedback
                 self.logger.info("Task reported as complete by LLM.")
                 # Ask user for confirmation and feedback
                 print("\n--- Task Complete? ---")
@@ -317,6 +341,7 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                     feedback["status"] = "failure"
                     feedback["message"] = "User indicated the task was not completed successfully. Feedback stored."
                     feedback["details"]["user_feedback_key"] = feedback_key
+                    self.agent_state["status"] = "aborted"  # Mark as aborted to prevent further retries
                 else:
                     feedback["message"] = "Task completed successfully (user confirmed)."
                     self.agent_state["status"] = "completed"
