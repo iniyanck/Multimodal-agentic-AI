@@ -98,7 +98,7 @@ class AgentCore:
 Available Tools and their usage {platform_note} (output ONLY a JSON object with 'action' and parameters):
 - read_file(file: str): Reads the content of a specified file.
 - write_file(file: str, content: str): Writes content to a specified file.
-- execute_shell_command(command: str, background: bool = False): Executes a shell command. If background=True, runs non-blocking and returns immediately. (Platform-aware)
+- execute_shell_command(command: str, background: bool = False): Executes a shell command. If launching a GUI app (like notepad, paint, etc.), set background=true to avoid blocking. If background=True, runs non-blocking and returns immediately. (Platform-aware)
 - focus_window(title_substring: str): Focuses a window whose title contains the given substring. (Windows only)
 - list_directory(path: str = "."): Lists the contents of a directory.
 - capture_screen(file: str): Captures the current screen and saves it. Use this to get visual context.
@@ -165,6 +165,7 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
             elif action_type == "execute_shell_command":
                 command = parsed_action.get("command")
                 background = parsed_action.get("background", False)
+                # Remove GUI keyword heuristic; rely on LLM to set background
                 if command:
                     return_code, stdout, stderr = self.system_interaction.execute_shell_command(command, background=background)
                     feedback["details"]["command"] = command
@@ -273,8 +274,21 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 feedback["details"]["duration"] = duration
             elif action_type == "task_complete":
                 self.logger.info("Task reported as complete by LLM.")
-                feedback["message"] = "Task completed successfully."
-                self.agent_state["status"] = "completed"
+                # Ask user for confirmation and feedback
+                print("\n--- Task Complete? ---")
+                user_confirm = input("Did the agent complete the task successfully? (yes/no): ").strip().lower()
+                if user_confirm not in ["yes", "y"]:
+                    feedback_msg = input("What could the agent have done better? (Your feedback will help improve future runs): ")
+                    # Store feedback in knowledge base with a timestamped key
+                    import datetime
+                    feedback_key = f"user_feedback_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    self.knowledge_base.store_knowledge(feedback_key, feedback_msg)
+                    feedback["status"] = "failure"
+                    feedback["message"] = "User indicated the task was not completed successfully. Feedback stored."
+                    feedback["details"]["user_feedback_key"] = feedback_key
+                else:
+                    feedback["message"] = "Task completed successfully (user confirmed)."
+                    self.agent_state["status"] = "completed"
             else:
                 feedback["status"] = "failure"
                 feedback["message"] = f"Unknown action: {action_type}. Please refine the LLM's output."

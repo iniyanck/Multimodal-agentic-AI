@@ -1,0 +1,23 @@
+# .gitignore
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+venv/
+ENV/
+.env
+.env.*
+
+# Logs
+*.log
+agent_ai/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SQLite DB
+*.db

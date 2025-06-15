@@ -1,5 +1,15 @@
 # Multimodal Agentic AI (Aether)
 
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Key Features](#key-features)
+- [Project Structure](#project-structure)
+- [Setup and Installation](#setup-and-installation)
+  - [Prerequisites](#prerequisites)
+  - [Environment Setup](#environment-setup)
+- [Running the Agent](#running-the-agent)
+- [Troubleshooting & Tips](#troubleshooting--tips)
+
 ## Project Overview
 
 "Aether" is an autonomous Multimodal Agentic AI designed to interact with your computer's environment, perceive visual information (via screen capture), perform file system operations, execute shell commands, and learn from user feedback to accomplish complex tasks. This agent leverages a Large Language Model (LLM) as its "brain" to reason, plan, and execute actions based on its observations and goals.
@@ -93,3 +103,14 @@ To start the agent, run the `main.py` script:
 ```bash
 python main.py
 ```
+
+## Troubleshooting & Tips
+
+- **Window Focusing:** The `focus_window` tool only works on Windows. On other platforms, window management is not supported.
+- **Screen Capture:** Requires appropriate permissions (e.g., Accessibility on macOS) and may need extra dependencies (e.g., `scrot` on Linux).
+- **API Key Issues:** If you see an error about `GOOGLE_API_KEY`, ensure your `.env` file is present and correct, or set the environment variable manually.
+- **Virtual Environment:** Always activate your virtual environment before running the agent to ensure dependencies are available.
+- **Logs:** Check the `agent_ai/logs/agent.log` file for detailed logs if something goes wrong.
+- **Platform Support:** Most features are tested on Windows. Some may require adaptation for macOS/Linux.
+
+For advanced usage, see the `docs/` directory (if present) or open an issue for help.
