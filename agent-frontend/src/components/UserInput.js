@@ -1,12 +1,17 @@
 import React from "react";
 import PropTypes from 'prop-types';
-import { Card, CardContent, Typography, Box, TextField, Button } from "@mui/material";
+import { Card, CardContent, Typography, Box, TextField, Button, Alert } from "@mui/material";
 
-export default function UserInput({ userInput, setUserInput, submitUserInput, loading, onFocus, onBlur }) {
+export default function UserInput({ userInput, setUserInput, submitUserInput, loading, onFocus, onBlur, pendingQuestion }) {
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
         <Typography variant="h6">Direct the Agent (Real-Time Direction/Feedback)</Typography>
+        {pendingQuestion && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>Agent asks:</strong> {pendingQuestion}
+          </Alert>
+        )}
         <Box display="flex" gap={2} mt={1}>
           <TextField
             label="Direction or Feedback (real-time)"
@@ -38,4 +43,5 @@ UserInput.propTypes = {
   loading: PropTypes.bool.isRequired,
   onFocus: PropTypes.func,
   onBlur: PropTypes.func,
+  pendingQuestion: PropTypes.string
 };

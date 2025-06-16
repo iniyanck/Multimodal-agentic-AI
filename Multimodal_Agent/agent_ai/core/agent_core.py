@@ -181,6 +181,10 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
         MAX_STEP_FAILURES = 3  # New: max failures per plan step
 
         while True:
+            if self.agent_state.get("status") == "completed":
+                print("\n--- Agent finished its task (main loop check). ---")
+                break
+
             if self.stop_flag:
                 print("\n--- Agent stopped by kill/reset ---")
                 self.agent_state["status"] = "aborted"
@@ -290,9 +294,47 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 action_result_feedback = self.execute_action(parsed_action) # This now returns a dict
                 print(f"Action Result: {action_result_feedback['status'].upper()} - {action_result_feedback['message']}")
 
-                if self.stop_flag:
-                    self.agent_state["status"] = "aborted"
-                    break
+                # --- Fix: If action is 'task_complete' and reflection confirms success, finish ---
+                if parsed_action.get("action") == "task_complete":
+                    # Reflection step
+                    reflection_prompt = self.global_prompt_manager.get_reflection_prompt(
+                        current_task_description=self.agent_state["current_task"],
+                        current_plan_step=current_step,
+                        action_executed=parsed_action,
+                        action_result=action_result_feedback, # Pass structured result
+                        current_context=self.global_prompt_manager.get_current_context(self.agent_state), # Fresh context
+                        history=self.agent_state["history"]
+                    )
+                    print("\n--- Agent Reflecting on Action Outcome ---")
+                    reflection_llm_response = self.call_llm(reflection_prompt, image_data=screen_image_bytes) # Pass screenshot again for reflection
+                    reflection_parsed = self.parse_llm_response(reflection_llm_response)
+                    action_successful_in_reflection = reflection_parsed.get("status") == "success"
+                    reflection_thought = reflection_parsed.get("thought", "No specific reflection thought provided.")
+                    print(f"Agent's Reflection: {reflection_thought}")
+                    if action_successful_in_reflection:
+                        self.logger.info("Agent completed the task. Setting status to 'completed'.")
+                        self.agent_state["status"] = "completed"
+                        break
+                    else:
+                        # If not successful, fallback to normal retry logic
+                        action_execution_retries += 1
+                        self.logger.warning(f"LLM indicated action failure or requested re-evaluation for 'task_complete'. Retries: {action_execution_retries}/{MAX_ACTION_EXECUTION_RETRIES}. LLM reason: {reflection_parsed.get('message', 'No message')}")
+                        if action_execution_retries >= MAX_ACTION_EXECUTION_RETRIES:
+                            self.logger.error("Too many action execution retries for 'task_complete'. Going back to planning to adjust strategy.")
+                            self.agent_state["status"] = "planning"
+                            action_execution_retries = 0
+                            self.agent_state["last_action_feedback"] = {
+                                "status": "failure",
+                                "message": f"'task_complete' repeatedly failed or could not be confirmed. LLM said: {reflection_parsed.get('message', 'No specific reason.')}. Please adjust the plan."
+                            }
+                        else:
+                            self.agent_state["last_action_feedback"] = {
+                                "status": "failure",
+                                "message": f"Previous 'task_complete' failed (LLM reflection). Retrying step. LLM reason: {reflection_parsed.get('message', 'No specific reason.')}",
+                                "details": action_result_feedback['details']
+                            }
+                        continue
+                # --- End fix for task_complete ---
 
                 # 4. Reflection and Confirmation (New Step)
                 # After executing an action, prompt the LLM to reflect on its success
@@ -322,6 +364,14 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                     self.agent_state["plan_step"] += 1 # Move to next step if successful
                     action_execution_retries = 0 # Reset retries
                     self.agent_state["last_action_feedback"] = action_result_feedback # Update feedback for next prompt
+                    # --- Fix: If status is now completed, break to stop agent (applies to any action) ---
+                    if self.agent_state.get("status") == "completed":
+                        print("\n--- Agent finished its task (post-reflection, any action). ---")
+                        break
+                    # --- Additional fix: If plan_step is at or beyond end, break unconditionally ---
+                    if self.agent_state["plan_step"] >= len(self.agent_state["current_plan"]):
+                        print("\n--- Agent finished all plan steps. ---")
+                        break
                 else:
                     action_execution_retries += 1
                     self.logger.warning(f"LLM indicated action failure or requested re-evaluation for step {self.agent_state['plan_step']}. Retries: {action_execution_retries}/{MAX_ACTION_EXECUTION_RETRIES}. LLM reason: {reflection_parsed.get('message', 'No message')}")

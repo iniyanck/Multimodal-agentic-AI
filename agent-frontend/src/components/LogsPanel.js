@@ -4,8 +4,12 @@ import { Card, CardContent, Typography, Box, Collapse, IconButton, Button } from
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import DownloadIcon from '@mui/icons-material/Download';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 export default function LogsPanel({ logs, logsOpen, setLogsOpen, downloadLogs, clearLogs }) {
+  const handleCopyLogs = () => {
+    navigator.clipboard.writeText(logs.join('\n'));
+  };
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
@@ -14,6 +18,9 @@ export default function LogsPanel({ logs, logsOpen, setLogsOpen, downloadLogs, c
           <Box>
             <IconButton onClick={downloadLogs} size="small" title="Download logs">
               <DownloadIcon />
+            </IconButton>
+            <IconButton onClick={handleCopyLogs} size="small" title="Copy logs to clipboard">
+              <ContentCopyIcon />
             </IconButton>
             <IconButton onClick={() => setLogsOpen(o => !o)} size="small" title={logsOpen ? "Hide logs" : "Show logs"}>
               {logsOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}

@@ -194,6 +194,7 @@ function App() {
               loading={loading || killing || quotaError}
               onFocus={() => setEditingUserInput(true)}
               onBlur={() => setEditingUserInput(false)}
+              pendingQuestion={pendingQuestion}
             />
           </Box>
         </Box>

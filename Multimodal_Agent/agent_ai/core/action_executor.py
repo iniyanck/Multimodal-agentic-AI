@@ -23,7 +23,8 @@ class ActionExecutor:
         "press_key",
         "hotkey",
         "click",
-        "ask_user"
+        "ask_user",
+        "web_search"  # <-- Add web_search
     }
 
     def __init__(self, file_io, screen_capture, system_interaction, logger, agent_state):
@@ -32,6 +33,11 @@ class ActionExecutor:
         self.system_interaction = system_interaction
         self.logger = logger
         self.agent_state = agent_state
+        try:
+            from ..action.web_search import web_search as web_search_tool
+            self.web_search_tool = web_search_tool
+        except ImportError:
+            self.web_search_tool = None
 
     def execute_action(self, parsed_action: dict) -> dict:
         action_type = parsed_action.get("action", "").strip().lower()
@@ -182,6 +188,18 @@ class ActionExecutor:
                 feedback["details"]["question"] = question
                 feedback["message"] = f"User input requested: {question}"
                 feedback["status"] = "pending_user_input"
+            elif action_type == "web_search":
+                query = parsed_action.get("query")
+                num_results = int(parsed_action.get("num_results", 3))
+                if self.web_search_tool and query:
+                    result = self.web_search_tool(query, num_results)
+                    feedback["details"]["query"] = query
+                    feedback["details"]["num_results"] = num_results
+                    feedback["details"]["result"] = result[:500] + ("..." if len(result) > 500 else "")
+                    feedback["message"] = f"Web search completed for query: {query}"
+                else:
+                    feedback["status"] = "failure"
+                    feedback["message"] = "web_search action missing 'query' parameter or tool not available."
             else:
                 self.logger.warning(f"Unknown action type encountered: {action_type}")
                 feedback["status"] = "failure"

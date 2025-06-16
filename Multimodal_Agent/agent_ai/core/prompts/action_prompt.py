@@ -26,6 +26,8 @@ class ActionPrompt:
         
         {self.base_instruction}
 
+        ***Before using the 'task_complete' action, you should consider capturing the screen (using 'capture_screen') and using visual cues to confirm that the task is truly complete.***
+
         You are currently executing a step in your overall plan. Your goal is to provide the exact parameters for the tool specified in the current plan step.
 
         Overall Task: "{current_task_description}"

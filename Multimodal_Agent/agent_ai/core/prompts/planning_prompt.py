@@ -47,14 +47,16 @@ class PlanningPrompt:
 
         Note: You should use your own perception and reasoning to select files or resources, not just rely on exact user input. Only ask the user for clarification if there are multiple ambiguous matches or no clear candidate.
 
+        ***When planning to complete a task, consider using visual cues by capturing the screen (using the 'capture_screen' action) and analyzing the result to confirm that the task is truly complete before using 'task_complete'.***
+
         Example Plan Structure:
         {{
             "plan": [
                 {{"action": "list_directory", "description": "First, I need to see what files are in the current directory."}},
                 {{"action": "read_file", "file": "important_doc.txt", "description": "Then, I'll read the important document to gather information."}},
                 {{"action": "type_text", "text": "Hello World!", "description": "Finally, I'll type 'Hello World!' into an open application."}},
-                {{"action": "ask_user", "question": "What should I do next?", "description": "Ask the user for clarification if needed."}},
-                {{"action": "task_complete", "description": "The task is finished."}}
+                {{"action": "capture_screen", "description": "Capture the screen to visually confirm the result before finishing."}},
+                {{"action": "task_complete", "description": "The task is finished after visually confirming completion."}}
             ]
         }}
         Provide ONLY the JSON response. Do not include any other text.
