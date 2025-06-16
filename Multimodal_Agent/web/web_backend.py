@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -44,6 +44,9 @@ class UserInputRequest(BaseModel):
 
 agent_thread = None
 agent_lock = threading.Lock()
+
+pending_question_path = os.path.join(os.path.dirname(__file__), "..", "pending_question.txt")
+pending_answer_path = os.path.join(os.path.dirname(__file__), "..", "pending_answer.txt")
 
 @app.post("/task")
 def submit_task(req: TaskRequest):
@@ -106,6 +109,26 @@ def get_user_input():
     with open(user_input_path, "r", encoding="utf-8") as f:
         content = f.read().strip()
     return {"user_input": content}
+
+@app.get("/pending_question")
+def get_pending_question():
+    if not os.path.exists(pending_question_path):
+        return {"question": None}
+    with open(pending_question_path, "r", encoding="utf-8") as f:
+        question = f.read().strip()
+    return {"question": question}
+
+@app.post("/pending_answer")
+def post_pending_answer(req: Request):
+    data = req.json() if hasattr(req, 'json') else req
+    answer = data.get("answer", "").strip()
+    # Save answer for agent to pick up
+    with open(pending_answer_path, "w", encoding="utf-8") as f:
+        f.write(answer)
+    # Remove the pending question
+    if os.path.exists(pending_question_path):
+        os.remove(pending_question_path)
+    return {"status": "received", "answer": answer}
 
 @app.post("/reset")
 def reset_agent():

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { Container, Box, Button } from "@mui/material";
 import StatusSummary from "./components/StatusSummary";
 import TaskInput from "./components/TaskInput";
 import UserInput from "./components/UserInput";
 import ScreenshotPanel from "./components/ScreenshotPanel";
 import LogsPanel from "./components/LogsPanel";
-
-const API_BASE = "http://127.0.0.1:8000";
+import AskUserModal from "./components/AskUserModal";
+import useAgentPolling from "./hooks/useAgentPolling";
+import { submitTask as apiSubmitTask, submitUserInput as apiSubmitUserInput, killAgent, clearLogs as apiClearLogs } from "./services/api";
+import axios from "axios";
 
 function App() {
   const [task, setTask] = useState("");
@@ -17,70 +18,35 @@ function App() {
   const [screenshotUrl, setScreenshotUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
-  const [fresh, setFresh] = useState(true); // new state
+  const [fresh, setFresh] = useState(true);
   const [planningStuck, setPlanningStuck] = useState(false);
   const [editingUserInput, setEditingUserInput] = useState(false);
   const [killing, setKilling] = useState(false);
   const [quotaError, setQuotaError] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState(null);
+  const [pendingAnswer, setPendingAnswer] = useState("");
 
-  // Only poll agent state if not fresh
+  useAgentPolling({ fresh, quotaError, editingUserInput, setStatus, setLogs, setUserInput, setScreenshotUrl, setPlanningStuck });
+
+  // Poll for pending question
   useEffect(() => {
-    let planningTimer;
-    let interval;
-    if (!fresh && !quotaError) {
-      const fetchStatus = () => {
-        axios.get(`${API_BASE}/status`).then(res => {
-          setStatus(res.data);
-          if (res.data.status === "quota_exceeded") {
-            setQuotaError(true);
-            setPlanningStuck(false);
-            return; // Stop further polling
-          }
-          if (res.data.status === "planning") {
-            if (!planningTimer) {
-              planningTimer = setTimeout(() => setPlanningStuck(true), 30000);
-            }
-          } else {
-            setPlanningStuck(false);
-            if (planningTimer) clearTimeout(planningTimer);
-          }
-        });
-        axios.get(`${API_BASE}/logs`).then(res => setLogs(res.data.logs || []));
-        axios.get(`${API_BASE}/user_input`).then(res => {
-          // Only update if not editing
-          if (!editingUserInput) setUserInput(res.data.user_input || "");
-        });
-        setScreenshotUrl(`${API_BASE}/screenshot?${Date.now()}`); // bust cache
-      };
-      fetchStatus();
-      interval = setInterval(fetchStatus, 3000);
-      return () => {
-        clearInterval(interval);
-        if (planningTimer) clearTimeout(planningTimer);
-      };
-    }
-    return () => {
-      if (planningTimer) clearTimeout(planningTimer);
-      if (interval) clearInterval(interval);
+    const poll = async () => {
+      try {
+        const res = await axios.get("http://127.0.0.1:8000/pending_question");
+        setPendingQuestion(res.data.question);
+      } catch {}
     };
-  }, [fresh, quotaError]); // Only depends on fresh
-
-  // On first load or after kill, clear all UI state except feedback/user input
-  useEffect(() => {
-    setTask("");
-    setStatus({});
-    setLogs([]);
-    setScreenshotUrl("");
-    setLogsOpen(false);
-    setFresh(true);
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   const submitTask = async () => {
     setLoading(true);
     try {
-      await axios.post(`${API_BASE}/task`, { task });
+      await apiSubmitTask(task);
       setTask("");
-      setFresh(false); // Start polling after first task
+      setFresh(false);
     } catch (e) {
       alert(e.response?.data?.error || "Failed to submit task");
     }
@@ -90,7 +56,7 @@ function App() {
   const submitUserInput = async () => {
     setLoading(true);
     try {
-      await axios.post(`${API_BASE}/user_input`, { user_input: userInput });
+      await apiSubmitUserInput(userInput);
       setEditingUserInput(false);
     } catch (e) {
       alert("Failed to send direction/feedback");
@@ -101,7 +67,7 @@ function App() {
   const resetAgent = async () => {
     setLoading(true);
     try {
-      await axios.post(`${API_BASE}/reset`);
+      await killAgent();
       setTask("");
       setUserInput("");
       setStatus({});
@@ -109,7 +75,7 @@ function App() {
       setScreenshotUrl("");
       setLogsOpen(false);
       setFresh(true);
-      setQuotaError(false); // Reset quota error state
+      setQuotaError(false);
     } catch (e) {
       alert("Failed to reset agent");
     }
@@ -120,7 +86,7 @@ function App() {
     setKilling(true);
     setLoading(true);
     try {
-      await axios.post(`${API_BASE}/kill`);
+      await killAgent();
       setTask("");
       setStatus({});
       setLogs([]);
@@ -150,7 +116,7 @@ function App() {
   const clearLogs = async () => {
     setLoading(true);
     try {
-      await axios.post(`${API_BASE}/clear_logs`);
+      await apiClearLogs();
       setLogs([]);
     } catch (e) {
       alert("Failed to clear logs");
@@ -158,68 +124,83 @@ function App() {
     setLoading(false);
   };
 
+  const submitPendingAnswer = async () => {
+    await axios.post("http://127.0.0.1:8000/pending_answer", { answer: pendingAnswer });
+    setPendingQuestion(null);
+    setPendingAnswer("");
+  };
+
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 4, background: '#f7f9fb', borderRadius: 3, boxShadow: 2, p: { xs: 1, sm: 3 } }}>
-      <h1 style={{ textAlign: "center", fontWeight: 700, letterSpacing: 1, marginBottom: 24, color: '#1a237e' }}>Multimodal Agent Dashboard</h1>
-      {quotaError ? (
-        <Box display="flex" flexDirection="column" alignItems="center" mb={2}>
-          <Box color="error.main" fontWeight={600} mb={1}>
-            LLM quota or rate limit exceeded. Please reset or try again later.
-          </Box>
-          <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing} sx={{ mr: 1 }}>
-            Reset Agent
-          </Button>
-          <Button variant="contained" color="error" onClick={killSwitch} disabled={loading || killing}>
-            {killing ? "Killing agent..." : "Kill Switch (Full Reset)"}
-          </Button>
-        </Box>
-      ) : planningStuck ? (
-        <Box display="flex" flexDirection="column" alignItems="center" mb={2}>
-          <Box color="error.main" fontWeight={600} mb={1}>
-            Agent appears stuck in planning. This may be due to an LLM or parsing error.
-          </Box>
-          <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing} sx={{ mr: 1 }}>
-            Reset Agent
-          </Button>
-          <Button variant="contained" color="error" onClick={killSwitch} disabled={loading || killing}>
-            {killing ? "Killing agent..." : "Kill Switch (Full Reset)"}
-          </Button>
-        </Box>
-      ) : (
-        <Box display="flex" justifyContent="center" mb={2} gap={2}>
-          {/* Only show kill switch if not planningStuck */}
-          {!planningStuck && (
+    <>
+      <AskUserModal
+        open={!!pendingQuestion}
+        question={pendingQuestion}
+        answer={pendingAnswer}
+        setAnswer={setPendingAnswer}
+        onSubmit={submitPendingAnswer}
+      />
+      <Container maxWidth="md" sx={{ mt: 4, mb: 4, background: '#f7f9fb', borderRadius: 3, boxShadow: 2, p: { xs: 1, sm: 3 } }}>
+        <h1 style={{ textAlign: "center", fontWeight: 700, letterSpacing: 1, marginBottom: 24, color: '#1a237e' }}>Multimodal Agent Dashboard</h1>
+        {quotaError ? (
+          <Box display="flex" flexDirection="column" alignItems="center" mb={2}>
+            <Box color="error.main" fontWeight={600} mb={1}>
+              LLM quota or rate limit exceeded. Please reset or try again later.
+            </Box>
+            <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing} sx={{ mr: 1 }}>
+              Reset Agent
+            </Button>
             <Button variant="contained" color="error" onClick={killSwitch} disabled={loading || killing}>
               {killing ? "Killing agent..." : "Kill Switch (Full Reset)"}
             </Button>
-          )}
-          {(!fresh && (status.status === "completed" || status.status === "idle" || status.status === "aborted")) && (
-            <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing}>
+          </Box>
+        ) : planningStuck ? (
+          <Box display="flex" flexDirection="column" alignItems="center" mb={2}>
+            <Box color="error.main" fontWeight={600} mb={1}>
+              Agent appears stuck in planning. This may be due to an LLM or parsing error.
+            </Box>
+            <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing} sx={{ mr: 1 }}>
               Reset Agent
             </Button>
-          )}
+            <Button variant="contained" color="error" onClick={killSwitch} disabled={loading || killing}>
+              {killing ? "Killing agent..." : "Kill Switch (Full Reset)"}
+            </Button>
+          </Box>
+        ) : (
+          <Box display="flex" justifyContent="center" mb={2} gap={2}>
+            {/* Only show kill switch if not planningStuck */}
+            {!planningStuck && (
+              <Button variant="contained" color="error" onClick={killSwitch} disabled={loading || killing}>
+                {killing ? "Killing agent..." : "Kill Switch (Full Reset)"}
+              </Button>
+            )}
+            {(!fresh && (status.status === "completed" || status.status === "idle" || status.status === "aborted")) && (
+              <Button variant="contained" color="secondary" onClick={resetAgent} disabled={loading || killing}>
+                Reset Agent
+              </Button>
+            )}
+          </Box>
+        )}
+        <TaskInput task={task} setTask={setTask} submitTask={submitTask} loading={loading || killing || quotaError || (!fresh && !(status.status === "idle" || status.status === "completed" || status.status === "aborted"))}
+        />
+        <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={3} mb={3}>
+          <Box flex={1} minWidth={0}>
+            {!fresh && <StatusSummary status={status} />}
+          </Box>
+          <Box flex={1} minWidth={0}>
+            <UserInput
+              userInput={userInput}
+              setUserInput={setUserInput}
+              submitUserInput={submitUserInput}
+              loading={loading || killing || quotaError}
+              onFocus={() => setEditingUserInput(true)}
+              onBlur={() => setEditingUserInput(false)}
+            />
+          </Box>
         </Box>
-      )}
-      <TaskInput task={task} setTask={setTask} submitTask={submitTask} loading={loading || killing || quotaError || (!fresh && !(status.status === "idle" || status.status === "completed" || status.status === "aborted"))}
-      />
-      <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={3} mb={3}>
-        <Box flex={1} minWidth={0}>
-          {!fresh && <StatusSummary status={status} />}
-        </Box>
-        <Box flex={1} minWidth={0}>
-          <UserInput
-            userInput={userInput}
-            setUserInput={setUserInput}
-            submitUserInput={submitUserInput}
-            loading={loading || killing || quotaError}
-            onFocus={() => setEditingUserInput(true)}
-            onBlur={() => setEditingUserInput(false)}
-          />
-        </Box>
-      </Box>
-      <ScreenshotPanel screenshotUrl={screenshotUrl} />
-      <LogsPanel logs={logs} logsOpen={logsOpen} setLogsOpen={setLogsOpen} downloadLogs={downloadLogs} clearLogs={clearLogs} />
-    </Container>
+        <ScreenshotPanel screenshotUrl={screenshotUrl} />
+        <LogsPanel logs={logs} logsOpen={logsOpen} setLogsOpen={setLogsOpen} downloadLogs={downloadLogs} clearLogs={clearLogs} />
+      </Container>
+    </>
   );
 }
 

@@ -1,191 +1,36 @@
 """
-GlobalPrompt class for generating prompts for LLM planning and action execution.
+GlobalPrompt facade for backward compatibility. Delegates to new prompt classes in prompts/.
 """
-import json
+from .prompts.planning_prompt import PlanningPrompt
+from .prompts.action_prompt import ActionPrompt
+from .prompts.reflection_prompt import ReflectionPrompt
+from .prompts.full_prompt import FullPrompt
+from .prompts.self_evaluation_prompt import SelfEvaluationPrompt
+from .prompts.context_helper import ContextHelper
 
 class GlobalPrompt:
-    """Manages prompt templates for planning and action execution."""
     def __init__(self):
-        self.base_instruction = (
-            "You are an AI agent designed to interact with a computer system. "
-            "Your goal is to accurately understand and execute user tasks."
-        )
+        self.planning = PlanningPrompt()
+        self.action = ActionPrompt()
+        self.reflection = ReflectionPrompt()
+        self.full = FullPrompt()
+        self.self_eval = SelfEvaluationPrompt()
+        self.context = ContextHelper()
 
-    def get_planning_prompt(self, task_description: str, current_context: str, tools_description: str, history: list) -> str:
-        """Generates a prompt for the LLM to create a plan."""
-        history_str = "\n".join([
-            f"- {entry['action']['action']} (Result: {entry.get('feedback', 'No feedback')})"
-            for entry in history[-5:]
-        ])
-        return f"""
-        {self.base_instruction}
+    def get_planning_prompt(self, *args, **kwargs):
+        return self.planning.get_planning_prompt(*args, **kwargs)
 
-        You are currently in the planning phase. Your objective is to break down the main task into a sequence of smaller, manageable steps. For each step, you should decide which tool to use and provide a brief description of the step.
+    def get_action_execution_prompt(self, *args, **kwargs):
+        return self.action.get_action_execution_prompt(*args, **kwargs)
 
-        Here is the main task you need to accomplish:
-        Task: "{task_description}"
+    def get_reflection_prompt(self, *args, **kwargs):
+        return self.reflection.get_reflection_prompt(*args, **kwargs)
 
-        Current System Context/Observations:
-        {current_context}
+    def get_full_prompt(self, *args, **kwargs):
+        return self.full.get_full_prompt(*args, **kwargs)
 
-        Available Tools and their usage:
-        {tools_description}
+    def get_current_context(self, *args, **kwargs):
+        return self.context.get_current_context(*args, **kwargs)
 
-        Recent Action History (for context and learning from past attempts):
-        {history_str if history_str else "No recent history."}
-
-        Based on the task and available tools, provide a plan as a JSON array of objects. Each object in the array should represent a step in your plan and *must* have an "action" key (the name of the tool to use) and a "description" key. You can also include other parameters for the action if you know them (e.g., "file" for "read_file"). The "action" key must directly map to one of the available tools.
-
-        Note: You should use your own perception and reasoning to select files or resources, not just rely on exact user input. For example, if the user says "play the holiday video" and you see files in the directory with names containing "holiday", you should select the best match automatically. Only ask the user for clarification if there are multiple ambiguous matches or no clear candidate.
-
-        Example Plan Structure:
-        {{
-            "plan": [
-                {{"action": "list_directory", "description": "First, I need to see what files are in the current directory."}},
-                {{"action": "read_file", "file": "important_doc.txt", "description": "Then, I'll read the important document to gather information."}},
-                {{"action": "type_text", "text": "Hello World!", "description": "Finally, I'll type 'Hello World!' into an open application."}},
-                {{"action": "task_complete", "description": "The task is finished."}}
-            ]
-        }}
-        Provide ONLY the JSON response. Do not include any other text.
-        """
-
-    def get_action_execution_prompt(self, current_task_description: str, current_plan_step: dict, last_action_feedback: str, last_read_content: str, last_directory_list: str, last_retrieved_knowledge: str, history: list, failed_steps_summary=None, successful_steps_summary=None) -> str:
-        """Generates a prompt for the LLM to decide on specific parameters for the current action."""
-        history_str = "\n".join([
-            f"- {entry['action']['action']} (Result: {entry.get('feedback', 'No feedback')})"
-            for entry in history[-5:]
-        ])
-        failed_str = "\n".join([
-            f"Step: {k}, Failures: {v}" for k, v in (failed_steps_summary or {}).items()
-        ])
-        success_str = "\n".join(successful_steps_summary or [])
-        return f"""
-        {self.base_instruction}
-
-        You are currently executing a step in your overall plan. Your goal is to provide the exact parameters for the tool specified in the current plan step.
-
-        Overall Task: "{current_task_description}"
-
-        Current Plan Step:
-        Action: {current_plan_step.get('action')}
-        Description: {current_plan_step.get('description', 'No description provided.')}
-        Previous Parameters (if any from plan): {json.dumps({k: v for k, v in current_plan_step.items() if k not in ['action', 'description']})}
-
-        Last Action Feedback: {last_action_feedback}
-        Last Read Content: {last_read_content if last_read_content else 'None'}
-        Last Directory List: {last_directory_list if last_directory_list else 'None'}
-        Last Retrieved Knowledge: {last_retrieved_knowledge if last_retrieved_knowledge else 'None'}
-
-        Recent Action History:
-        {history_str if history_str else "No recent history."}
-
-        Failed Steps Summary (avoid repeating these):
-        {failed_str if failed_str else "None"}
-
-        Successful Steps Summary:
-        {success_str if success_str else "None"}
-
-        IMPORTANT: Use common sense and practical judgment. If the main goal of the task is reasonably achieved, you may mark the task as complete, even if every step is not perfect. For example, if the user asked to rickroll them and you opened Notepad and typed some lyrics, that is sufficient. Do not get stuck trying to achieve perfection. Explain your reasoning if you decide the task is complete.
-
-        Based on the current plan step, the overall task, and the provided feedback/observations, decide the exact parameters for the action '{current_plan_step.get('action')}' and provide them as a JSON object. Ensure the JSON object contains an "action" key with the value '{current_plan_step.get('action')}' and all necessary parameters for that action.
-
-        Example for 'write_file' action:
-        {{
-            "action": "write_file",
-            "file": "my_new_file.txt",
-            "content": "This is the content I want to write."
-        }}
-        Example for 'list_directory' action:
-        {{
-            "action": "list_directory",
-            "path": "."
-        }}
-        Example for 'task_complete' action:
-        {{
-            "action": "task_complete"
-        }}
-        Provide ONLY the JSON response. Do not include any other text.
-        """
-    
-    def get_reflection_prompt(self, current_task_description, current_plan_step, action_executed, action_result, current_context, history):
-        """Constructs a prompt that asks the LLM to assess the success of the action and if the plan step is complete."""
-        return f"""
-        Reflecting on the last action: {action_executed.get('action')}.  Action result: {action_result}.  Current task: {current_task_description}.  Current plan step: {current_plan_step}.
-        Based on the action result, was the action successful and is this plan step complete? Use common sense and practical judgment: if the main goal is reasonably achieved, you may consider the step or task complete, even if not perfect. Explain your reasoning.
-        Output ONLY a JSON object with 'status' ('success' or 'failure'), 'thought' explaining your reasoning, and optionally a 'message' if there are issues.
-        Example: {{"status": "success", "thought": "The action completed successfully and achieved the desired state."}}
-        """
-
-    def get_full_prompt(self, **kwargs):
-        """General reasoning prompt for the agent to decide the next best action."""
-        # This method might become less central if planning and action execution have separate prompts.
-        # However, it could still be used for a general "reasoning" prompt if the agent needs to
-        # decide between planning or executing. For now, it's simplified.
-        return f"""
-        {self.base_instruction}
-
-        Here is the current state and task:
-        Current Task: {kwargs.get('current_task_description')}
-        Last Action Feedback: {kwargs.get('last_action_feedback')}
-        Last Read Content: {kwargs.get('last_read_content', 'None')}
-        Last Directory List: {kwargs.get('last_directory_list', 'None')}
-        Last Retrieved Knowledge: {kwargs.get('last_retrieved_knowledge', 'None')}
-
-        Based on the above, decide the next best action in JSON format.
-        Available actions are: read_file, write_file, execute_shell_command, list_directory, capture_screen, move_mouse, click, type_text, press_key, hotkey, store_knowledge, retrieve_knowledge, ask_user, wait, task_complete.
-
-        Your response MUST be a single JSON object with an "action" key and appropriate parameters.
-        """
-
-    def get_current_context(self, agent_state: dict) -> str:
-        """Helper to summarize current relevant context for the LLM."""
-        context = []
-        if agent_state.get('last_action_feedback'):
-            context.append(f"Last action feedback: {agent_state['last_action_feedback']}")
-        if agent_state.get('last_read_content'):
-            context.append(f"Last file content read: {agent_state['last_read_content'][:200]}...")
-        if agent_state.get('last_directory_list'):
-            context.append(f"Last directory listing: {agent_state['last_directory_list']}")
-        if agent_state.get('last_retrieved_knowledge'):
-            context.append(f"Last retrieved knowledge: {agent_state['last_retrieved_knowledge']}")
-        # You could also add information about the current screenshot, if parsed.
-        return "\n".join(context) if context else "No specific observations yet."
-
-    def get_self_evaluation_prompt(self, current_task: str, history: list, final_state: dict) -> str:
-        """
-        Generates a prompt for the LLM to critique the agent's overall performance after task completion.
-        """
-        history_str = "\n".join([
-            f"- {entry['action']['action']} (Result: {entry['action'].get('status', 'unknown')})" for entry in history[-10:]
-        ])
-        return f"""
-        {self.base_instruction}
-
-        The task has been completed. Please provide a critical self-evaluation of your performance on the following task:
-        Task: \"{current_task}\\"
-
-        Recent Action History (last 10 steps):
-        {history_str if history_str else 'No recent history.'}
-
-        Final Agent State:
-        {json.dumps(final_state, indent=2)}
-
-        Please answer the following:
-        - Did you accomplish the task successfully? Why or why not?
-        - What went well, and what could be improved?
-        - Were there any mistakes, inefficiencies, or unnecessary steps?
-        - What would you do differently next time?
-        - Give yourself a score from 1 (poor) to 10 (excellent) for this episode.
-
-        Output ONLY a JSON object with keys: 'success' (true/false), 'score' (1-10), 'strengths', 'weaknesses', 'improvements', and 'summary'.
-        Example:
-        {{
-            "success": true,
-            "score": 8,
-            "strengths": "Clear planning and correct execution.",
-            "weaknesses": "One unnecessary directory listing step.",
-            "improvements": "Be more concise in planning.",
-            "summary": "The agent completed the task with minor inefficiencies."
-        }}
-        """
+    def get_self_evaluation_prompt(self, *args, **kwargs):
+        return self.self_eval.get_self_evaluation_prompt(*args, **kwargs)

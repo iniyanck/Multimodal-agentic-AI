@@ -35,12 +35,25 @@ class FeedbackHandler:
         return agent_state
 
     def ask_user_for_input(self, question: str) -> str:
-        """Asks the user a question and returns their input."""
-        print(f"\n--- Agent needs input ---")
-        print(f"Agent Question: {question}")
-        user_input = input("Your response: ")
-        self.receive_feedback(f"User provided input: {user_input}") # Log user's response as feedback
-        return user_input
+        """Web-compatible: writes question to pending_question.txt and waits for answer in pending_answer.txt."""
+        import os, time
+        pending_question_path = os.path.join(os.path.dirname(__file__), "..", "..", "pending_question.txt")
+        pending_answer_path = os.path.join(os.path.dirname(__file__), "..", "..", "pending_answer.txt")
+        # Write the question
+        with open(pending_question_path, "w", encoding="utf-8") as f:
+            f.write(question)
+        self.logger.info(f"Agent asked user: {question}")
+        # Wait for answer (poll every second, timeout after 5 minutes)
+        for _ in range(300):
+            if os.path.exists(pending_answer_path):
+                with open(pending_answer_path, "r", encoding="utf-8") as f:
+                    answer = f.read().strip()
+                os.remove(pending_answer_path)
+                self.logger.info(f"User answered: {answer}")
+                return answer
+            time.sleep(1)
+        self.logger.error("Timed out waiting for user answer.")
+        return ""
 
 # Example Usage
 if __name__ == "__main__":

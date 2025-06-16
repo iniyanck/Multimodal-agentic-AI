@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from "prop-types";
 import { Card, CardContent, Typography, Box, TextField, Button } from "@mui/material";
 
 export default function TaskInput({ task, setTask, submitTask, loading }) {
@@ -25,3 +26,10 @@ export default function TaskInput({ task, setTask, submitTask, loading }) {
     </Card>
   );
 }
+
+TaskInput.propTypes = {
+  task: PropTypes.string.isRequired,
+  setTask: PropTypes.func.isRequired,
+  submitTask: PropTypes.func.isRequired,
+  loading: PropTypes.bool.isRequired,
+};

@@ -1,5 +1,7 @@
 import React from "react";
+import PropTypes from "prop-types";
 import { Stack, Box, Chip, Typography } from "@mui/material";
+import { formatDateTime } from "../utils/format";
 
 export default function StatusSummary({ status }) {
   if (!status || typeof status !== "object") return null;
@@ -37,3 +39,7 @@ export default function StatusSummary({ status }) {
     </Stack>
   );
 }
+
+StatusSummary.propTypes = {
+  status: PropTypes.object,
+};

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import { Card, CardContent, Typography, Box } from "@mui/material";
 
 export default function ScreenshotPanel({ screenshotUrl }) {
@@ -25,3 +26,7 @@ export default function ScreenshotPanel({ screenshotUrl }) {
     </Card>
   );
 }
+
+ScreenshotPanel.propTypes = {
+  screenshotUrl: PropTypes.string.isRequired,
+};

@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from 'prop-types';
 import { Card, CardContent, Typography, Box, TextField, Button } from "@mui/material";
 
 export default function UserInput({ userInput, setUserInput, submitUserInput, loading, onFocus, onBlur }) {
@@ -29,3 +30,12 @@ export default function UserInput({ userInput, setUserInput, submitUserInput, lo
     </Card>
   );
 }
+
+UserInput.propTypes = {
+  userInput: PropTypes.string.isRequired,
+  setUserInput: PropTypes.func.isRequired,
+  submitUserInput: PropTypes.func.isRequired,
+  loading: PropTypes.bool.isRequired,
+  onFocus: PropTypes.func,
+  onBlur: PropTypes.func,
+};

@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from 'prop-types';
 import { Card, CardContent, Typography, Box, Collapse, IconButton, Button } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -33,3 +34,11 @@ export default function LogsPanel({ logs, logsOpen, setLogsOpen, downloadLogs, c
     </Card>
   );
 }
+
+LogsPanel.propTypes = {
+  logs: PropTypes.array.isRequired,
+  logsOpen: PropTypes.bool.isRequired,
+  setLogsOpen: PropTypes.func.isRequired,
+  downloadLogs: PropTypes.func.isRequired,
+  clearLogs: PropTypes.func.isRequired,
+};
