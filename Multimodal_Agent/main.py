@@ -9,6 +9,7 @@ from typing import Optional
 import time
 from agent_ai.core.agent_core import AgentCore
 import google.generativeai as genai
+from agent_ai.core.llm.loader import LLMLoader
 
 USER_INPUT_FILE = os.path.join(os.path.dirname(__file__), 'user_input.txt')
 
@@ -43,23 +44,11 @@ def main() -> None:
     else:
         load_dotenv()
 
-    api_key: Optional[str] = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        print("WARNING: GOOGLE_API_KEY environment variable not set.")
-        print("Please set it (e.g., export GOOGLE_API_KEY='your_key_here') or add it to a .env file in the project root.")
-        sys.exit("API Key not found. Exiting.")
-
-    genai.configure(api_key=api_key)
-    print("Available models:")
-    models = [m for m in genai.list_models() if "generateContent" in getattr(m, "supported_generation_methods", [])]
-    if not models:
-        print("No models supporting generateContent found.")
-        sys.exit(1)
-    for m in models:
-        print(f"- {m.name} (supports generateContent)")
-
-    # For multimodal (Gemini 1.5 Flash is recommended for its speed and cost-effectiveness with vision):
-    llm_client = genai.GenerativeModel('gemini-2.0-flash')
+    # Multi-LLM support (config only, no prompt)
+    llm_loader = LLMLoader()
+    llm_name, llm_info = llm_loader.get_default_llm()
+    llm_client = llm_loader.get_llm_client(llm_name, llm_info)
+    print(f"Using LLM: {llm_name} ({llm_info['provider']}, model: {llm_info['model']})")
     agent = AgentCore(llm_client=llm_client)
 
     initial_task = input("Enter the initial task for the AI agent: ")

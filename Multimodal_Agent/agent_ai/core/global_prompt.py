@@ -50,12 +50,16 @@ class GlobalPrompt:
         Provide ONLY the JSON response. Do not include any other text.
         """
 
-    def get_action_execution_prompt(self, current_task_description: str, current_plan_step: dict, last_action_feedback: str, last_read_content: str, last_directory_list: str, last_retrieved_knowledge: str, history: list) -> str:
+    def get_action_execution_prompt(self, current_task_description: str, current_plan_step: dict, last_action_feedback: str, last_read_content: str, last_directory_list: str, last_retrieved_knowledge: str, history: list, failed_steps_summary=None, successful_steps_summary=None) -> str:
         """Generates a prompt for the LLM to decide on specific parameters for the current action."""
         history_str = "\n".join([
             f"- {entry['action']['action']} (Result: {entry.get('feedback', 'No feedback')})"
             for entry in history[-5:]
         ])
+        failed_str = "\n".join([
+            f"Step: {k}, Failures: {v}" for k, v in (failed_steps_summary or {}).items()
+        ])
+        success_str = "\n".join(successful_steps_summary or [])
         return f"""
         {self.base_instruction}
 
@@ -75,6 +79,14 @@ class GlobalPrompt:
 
         Recent Action History:
         {history_str if history_str else "No recent history."}
+
+        Failed Steps Summary (avoid repeating these):
+        {failed_str if failed_str else "None"}
+
+        Successful Steps Summary:
+        {success_str if success_str else "None"}
+
+        IMPORTANT: Use common sense and practical judgment. If the main goal of the task is reasonably achieved, you may mark the task as complete, even if every step is not perfect. For example, if the user asked to rickroll them and you opened Notepad and typed some lyrics, that is sufficient. Do not get stuck trying to achieve perfection. Explain your reasoning if you decide the task is complete.
 
         Based on the current plan step, the overall task, and the provided feedback/observations, decide the exact parameters for the action '{current_plan_step.get('action')}' and provide them as a JSON object. Ensure the JSON object contains an "action" key with the value '{current_plan_step.get('action')}' and all necessary parameters for that action.
 
@@ -98,13 +110,12 @@ class GlobalPrompt:
     
     def get_reflection_prompt(self, current_task_description, current_plan_step, action_executed, action_result, current_context, history):
         """Constructs a prompt that asks the LLM to assess the success of the action and if the plan step is complete."""
-        # Placeholder for reflection prompt generation logic
-        # This should construct a prompt that asks the LLM to assess the success
-        # of the action, and if the plan step can be considered complete.
-        # It should consider the action_result (including any errors),
-        # the overall task, and the current plan step.
-        prompt = f"Reflecting on the last action: {action_executed.get('action')}.  Action result: {action_result}.  Current task: {current_task_description}.  Current plan step: {current_plan_step}.  Based on the action result, was the action successful and is this plan step complete?  Explain your reasoning.  Output ONLY a JSON object with 'status' ('success' or 'failure'), 'thought' explaining your reasoning, and optionally a 'message' if there are issues.  Example: {{\"status\": \"success\", \"thought\": \"The action completed successfully and achieved the desired state.\"}}"
-        return prompt
+        return f"""
+        Reflecting on the last action: {action_executed.get('action')}.  Action result: {action_result}.  Current task: {current_task_description}.  Current plan step: {current_plan_step}.
+        Based on the action result, was the action successful and is this plan step complete? Use common sense and practical judgment: if the main goal is reasonably achieved, you may consider the step or task complete, even if not perfect. Explain your reasoning.
+        Output ONLY a JSON object with 'status' ('success' or 'failure'), 'thought' explaining your reasoning, and optionally a 'message' if there are issues.
+        Example: {{"status": "success", "thought": "The action completed successfully and achieved the desired state."}}
+        """
 
     def get_full_prompt(self, **kwargs):
         """General reasoning prompt for the agent to decide the next best action."""

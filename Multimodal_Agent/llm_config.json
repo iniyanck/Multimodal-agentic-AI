@@ -1,0 +1,20 @@
+{
+  "default": "gemini",
+  "llms": {
+    "gemini": {
+      "provider": "google",
+      "model": "gemini-1.5-flash",
+      "api_key": "AIzaSyA3wVL6CiBpRGp3jK6gKceGnaDDgFPpFYo"
+    },
+    "openai": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "api_key": "YOUR_OPENAI_API_KEY"
+    },
+    "anthropic": {
+      "provider": "anthropic",
+      "model": "claude-3-opus-20240229",
+      "api_key": "YOUR_ANTHROPIC_API_KEY"
+    }
+  }
+}

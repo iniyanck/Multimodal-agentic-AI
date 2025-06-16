@@ -1,10 +1,10 @@
 import React from "react";
-import { Card, CardContent, Typography, Box, Collapse, IconButton } from "@mui/material";
+import { Card, CardContent, Typography, Box, Collapse, IconButton, Button } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import DownloadIcon from '@mui/icons-material/Download';
 
-export default function LogsPanel({ logs, logsOpen, setLogsOpen, downloadLogs }) {
+export default function LogsPanel({ logs, logsOpen, setLogsOpen, downloadLogs, clearLogs }) {
   return (
     <Card sx={{ mb: 3 }}>
       <CardContent>
@@ -22,6 +22,11 @@ export default function LogsPanel({ logs, logsOpen, setLogsOpen, downloadLogs })
         <Collapse in={logsOpen}>
           <Box sx={{ maxHeight: 200, overflow: "auto", background: "#222", color: "#fff", p: 1, borderRadius: 1, mt: 1 }}>
             {logs.map((line, i) => <div key={i}>{line}</div>)}
+          </Box>
+          <Box display="flex" justifyContent="flex-end" mt={1}>
+            <Button variant="outlined" color="secondary" size="small" onClick={clearLogs}>
+              Clear Logs
+            </Button>
           </Box>
         </Collapse>
       </CardContent>

@@ -18,9 +18,13 @@ from PIL import Image
 from ..utils.logger import Logger
 from ..action.web_search import web_search
 import os
+import datetime
 
 class AgentCore:
     """Main orchestrator for agent perception, memory, planning, and action."""
+    llm_call_count = 0
+    llm_call_timestamps = []
+
     def __init__(self, llm_client=None):
         self.file_io = FileIO()
         self.screen_capture = ScreenCapture()
@@ -40,6 +44,10 @@ class AgentCore:
         self.last_screenshot_pil = None
         self.stop_flag = False  # Add stop flag
         self.interactive = True  # Add interactive flag
+        self.failed_steps = {}
+        self.successful_steps = set()
+        self.llm_call_count = 0
+        self.llm_call_timestamps = []
 
     def _call_llm(self, prompt: str, image_data: bytes | None = None) -> str:
         """Calls the Large Language Model (LLM) with a prompt and optional image data."""
@@ -61,6 +69,17 @@ class AgentCore:
             if image_data:
                 self.logger.info("Image data included in LLM call.")
 
+            # --- LLM call diagnostics ---
+            AgentCore.llm_call_count += 1
+            now = datetime.datetime.now()
+            AgentCore.llm_call_timestamps.append(now)
+            self.logger.info(f"LLM CALL #{AgentCore.llm_call_count} at {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            # Print last 5 call times for burst detection
+            if len(AgentCore.llm_call_timestamps) > 1:
+                recent = AgentCore.llm_call_timestamps[-5:]
+                self.logger.info(f"Last 5 LLM call times: {[t.strftime('%H:%M:%S') for t in recent]}")
+            # --- END diagnostics ---
+
             response = self.llm_client.generate_content(
                 contents=contents,
                 generation_config={"temperature": 0.7}
@@ -74,8 +93,16 @@ class AgentCore:
             return response.text
 
         except Exception as e:
-            self.logger.error(f"Error calling LLM API: {e}", exc_info=True)
-            return json.dumps({"action": "unknown", "error": f"LLM API error: {e}"})
+            error_str = str(e)
+            # Detect quota/429 errors (OpenAI, Gemini, Anthropic, etc.)
+            if any(keyword in error_str.lower() for keyword in ["quota", "rate limit", "429", "exceeded", "too many requests"]):
+                self.logger.error(f"LLM quota/rate limit error: {e}", exc_info=True)
+                self.agent_state["status"] = "quota_exceeded"
+                self.knowledge_base.store_agent_state(self.agent_state)
+                return json.dumps({"action": "unknown", "error": f"LLM quota/rate limit error: {e}"})
+            else:
+                self.logger.error(f"Error calling LLM API: {e}", exc_info=True)
+                return json.dumps({"action": "unknown", "error": f"LLM API error: {e}"})
 
     def _parse_llm_response(self, response: str) -> dict:
         """Parses the LLM's response, extracting a JSON object for action or plan."""
@@ -426,12 +453,16 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
 
         MAX_TOTAL_STEPS = 50
         total_steps = 0
+        MAX_PLANNING_CYCLES = 3  # New: maximum times to re-plan for the same task
+        planning_cycles = 0
 
         MAX_PARSE_RETRIES = 3
         parse_failures = 0
 
         MAX_ACTION_EXECUTION_RETRIES = 2 # Max retries for a single action within a plan step
         action_execution_retries = 0
+
+        MAX_STEP_FAILURES = 3  # New: max failures per plan step
 
         while True:
             if self.stop_flag:
@@ -448,6 +479,12 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 if self.stop_flag:
                     self.agent_state["status"] = "aborted"
                     break
+                if planning_cycles >= MAX_PLANNING_CYCLES:
+                    print("\n--- Maximum planning cycles reached. Aborting task to prevent infinite loop. ---")
+                    self.logger.error("Maximum planning cycles reached. Aborting task.")
+                    self.agent_state["status"] = "aborted"
+                    break
+                planning_cycles += 1
                 print("\n--- Agent Planning ---")
                 current_context = self.global_prompt_manager.get_current_context(self.agent_state)
                 self.agent_state["current_plan"] = self._plan_task(self.agent_state["current_task"], current_context)
@@ -472,6 +509,8 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                     self.agent_state["status"] = "planning"
                     continue
                 current_step = self.agent_state["current_plan"][self.agent_state["plan_step"]]
+                step_signature = json.dumps(current_step, sort_keys=True)
+
                 # Removed user confirmation for risky actions; proceed automatically
 
                 # 1. Perception/Observation for this step
@@ -491,22 +530,20 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
                 # Construct LLM Prompt for action execution (now it's more about refining the current step)
                 last_action_feedback_str = json.dumps(self.agent_state.get('last_action_feedback', {"status": "none", "message": "No previous action feedback."}))
 
-                action_prompt = self.global_prompt_manager.get_action_execution_prompt(
-                    current_task_description=self.agent_state["current_task"],
-                    current_plan_step=current_step,
-                    last_action_feedback=last_action_feedback_str, # Pass structured feedback
-                    last_read_content=self.agent_state.get('last_read_content'),
-                    last_directory_list=self.agent_state.get('last_directory_list'),
-                    last_retrieved_knowledge=self.agent_state.get('last_retrieved_knowledge'),
-                    history=self.agent_state["history"]
+                llm_response_text = self._call_llm(
+                    self.global_prompt_manager.get_action_execution_prompt(
+                        current_task_description=self.agent_state["current_task"],
+                        current_plan_step=current_step,
+                        last_action_feedback=last_action_feedback_str,
+                        last_read_content=self.agent_state.get('last_read_content'),
+                        last_directory_list=self.agent_state.get('last_directory_list'),
+                        last_retrieved_knowledge=self.agent_state.get('last_retrieved_knowledge'),
+                        history=self.agent_state["history"][-5:],
+                        failed_steps_summary=self.failed_steps,
+                        successful_steps_summary=list(self.successful_steps)
+                    ),
+                    image_data=screen_image_bytes
                 )
-
-                if self.stop_flag:
-                    self.agent_state["status"] = "aborted"
-                    break
-
-                # 2. Reasoning (LLM Call to get specific action parameters)
-                llm_response_text = self._call_llm(action_prompt, image_data=screen_image_bytes)
                 parsed_action = self._parse_llm_response(llm_response_text)
 
                 if self.stop_flag:
