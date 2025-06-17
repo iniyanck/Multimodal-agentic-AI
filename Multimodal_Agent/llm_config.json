@@ -4,7 +4,7 @@
     "gemini": {
       "provider": "google",
       "model": "gemini-1.5-flash",
-      "api_key": "AIzaSyA3wVL6CiBpRGp3jK6gKceGnaDDgFPpFYo"
+      "api_key": ""
     },
     "openai": {
       "provider": "openai",

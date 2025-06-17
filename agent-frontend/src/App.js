@@ -71,9 +71,9 @@ function App() {
       setTask("");
       setUserInput("");
       setStatus({});
-      setLogs([]);
+      //setLogs([]);
       setScreenshotUrl("");
-      setLogsOpen(false);
+      //setLogsOpen(false);
       setFresh(true);
       setQuotaError(false);
     } catch (e) {

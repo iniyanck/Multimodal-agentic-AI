@@ -21,7 +21,7 @@ class FullPrompt:
         Last Retrieved Knowledge: {kwargs.get('last_retrieved_knowledge', 'None')}
 
         Based on the above, decide the next best action in JSON format.
-        Available actions are: read_file, write_file, execute_shell_command, list_directory, capture_screen, move_mouse, click, type_text, press_key, hotkey, store_knowledge, retrieve_knowledge, ask_user, wait, task_complete.
+        Available actions are: read_file, write_file, execute_shell_command, list_directory, capture_screen, move_mouse, click, type_text, press_key, hotkey, store_knowledge, retrieve_knowledge, wait, task_complete.
 
         Your response MUST be a single JSON object with an "action" key and appropriate parameters.
         """

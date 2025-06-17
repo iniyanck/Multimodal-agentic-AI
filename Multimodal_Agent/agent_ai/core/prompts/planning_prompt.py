@@ -38,14 +38,14 @@ class PlanningPrompt:
         Available Tools and their usage:
         {tools_description}
 
-        ***IMPORTANT: You may ONLY use the following actions/tools in your plan: {allowed_actions_str}. Do NOT use any other action, tool, or shell command not listed here.***
+        ***IMPORTANT: You may ONLY use the following actions/tools in your plan: {allowed_actions_str}. Do NOT use any other action or tool not listed here. Prefer executing shell commands over other actions. If you think about it, most tasks can be completed with the shell alone.***
 
         Recent Action History (for context and learning from past attempts):
         {history_str if history_str else "No recent history."}
 
         Based on the task and available tools, provide a plan as a JSON array of objects. Each object in the array should represent a step in your plan and *must* have an "action" key (the name of the tool to use) and a "description" key. You can also include other parameters for the action if you know them (e.g., "file" for "read_file"). The "action" key must directly map to one of the available tools.
 
-        Note: You should use your own perception and reasoning to select files or resources, not just rely on exact user input. Only ask the user for clarification if there are multiple ambiguous matches or no clear candidate.
+        You should use yor ingenuity and common sense to effectively complete the task
 
         ***When planning to complete a task, consider using visual cues by capturing the screen (using the 'capture_screen' action) and analyzing the result to confirm that the task is truly complete before using 'task_complete'.***
 

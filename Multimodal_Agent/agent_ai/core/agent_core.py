@@ -76,7 +76,8 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
   Example: {{"action": "read_file", "file": "README.md"}}
 - write_file(file: str, content: str): Writes content to a specified file.
   Example: {{"action": "write_file", "file": "output.txt", "content": "Hello!"}}
-- execute_shell_command(command: str, background: bool = False): Executes a shell command. If launching a GUI app, set background=true. Example: {{"action": "execute_shell_command", "command": "notepad", "background": true}}
+- execute_shell_command(command: str, background: bool = False): Executes a shell command. If launching a GUI app, set background=true.
+  Example: {{"action": "execute_shell_command", "command": "notepad", "background": true}}
 - focus_window(title_substring: str): Focuses a window whose title contains the given substring. (Windows only)
   Example: {{"action": "focus_window", "title_substring": "Notepad"}}
 - list_directory(path: str = "."): Lists the contents of a directory.
@@ -97,8 +98,6 @@ Available Tools and their usage {platform_note} (output ONLY a JSON object with 
   Example: {{"action": "store_knowledge", "key": "last_app", "value": "notepad"}}
 - retrieve_knowledge(key: str): Retrieves information from the agent's knowledge base.
   Example: {{"action": "retrieve_knowledge", "key": "last_app"}}
-- ask_user(question: str): Asks the user a question and waits for a response.
-  Example: {{"action": "ask_user", "question": "What should I do next?"}}
 - wait(duration: int): Pauses agent execution for a specified number of seconds.
   Example: {{"action": "wait", "duration": 3}}
 - decompose_subtask(subtask_description: str): If a step is too complex, break it down into a new plan and execute recursively.

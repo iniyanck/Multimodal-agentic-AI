@@ -170,11 +170,11 @@ def kill_switch():
     agent.agent_state["status"] = "idle"  # Ensure status is idle after kill
     # Clear logs
     log_path = os.path.join(os.path.dirname(__file__), "..", "agent_ai", "logs", "agent.log")
-    try:
+    '''try:
         with open(log_path, "w", encoding="utf-8") as f:
             f.write("")
     except Exception:
-        pass
+        pass'''
     # Remove screenshot
     screenshot_path = os.path.join(os.path.dirname(__file__), "..", "agent_ai", "logs", "screens", "current_screen_step.png")
     try:

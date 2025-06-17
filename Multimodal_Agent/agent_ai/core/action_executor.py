@@ -23,7 +23,7 @@ class ActionExecutor:
         "press_key",
         "hotkey",
         "click",
-        "ask_user",
+        #"ask_user",
         "web_search"  # <-- Add web_search
     }
 
@@ -73,18 +73,6 @@ class ActionExecutor:
                     feedback["message"] = f"Failed to write to {filename}."
             elif action_type == "execute_shell_command":
                 command = parsed_action.get("command")
-                if command and ("play" in self.agent_state["current_task"].lower() or "video" in self.agent_state["current_task"].lower()):
-                    import re
-                    user_keywords = re.findall(r"[\w-]+", self.agent_state["current_task"])
-                    video_dir = os.path.expanduser(parsed_action.get("cwd", os.path.expanduser("~")))
-                    if "videos" in video_dir.lower() or os.path.exists(os.path.join(os.path.expanduser("~"), "Videos")):
-                        video_dir = os.path.join(os.path.expanduser("~"), "Videos")
-                    for keyword in user_keywords:
-                        matches = find_video_files_by_keyword_recursive(video_dir, keyword)
-                        if matches:
-                            command = f'start "" "{os.path.join(video_dir, matches[0])}"'
-                            feedback["details"]["matched_file"] = matches[0]
-                            break
                 background = parsed_action.get("background", False)
                 if command:
                     return_code, stdout, stderr = self.system_interaction.execute_shell_command(command, background=background)
@@ -181,13 +169,13 @@ class ActionExecutor:
                     self.system_interaction.click(button=button)
                 feedback["details"]["coordinates"] = {"x": x, "y": y}
                 feedback["details"]["button"] = button
-            elif action_type == "ask_user":
-                question = parsed_action.get("question", "")
-                self.logger.info(f"Agent asks user: {question}")
-                self.agent_state["pending_user_question"] = question
-                feedback["details"]["question"] = question
-                feedback["message"] = f"User input requested: {question}"
-                feedback["status"] = "pending_user_input"
+            # elif action_type == "ask_user":
+            #     question = parsed_action.get("question", "")
+            #     self.logger.info(f"Agent asks user: {question}")
+            #     self.agent_state["pending_user_question"] = question
+            #     feedback["details"]["question"] = question
+            #     feedback["message"] = f"User input requested: {question}"
+            #     feedback["status"] = "pending_user_input"
             elif action_type == "web_search":
                 query = parsed_action.get("query")
                 num_results = int(parsed_action.get("num_results", 3))

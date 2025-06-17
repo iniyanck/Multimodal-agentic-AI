@@ -34,7 +34,7 @@ class FeedbackHandler:
         agent_state["last_feedback"] = feedback
         return agent_state
 
-    def ask_user_for_input(self, question: str) -> str:
+    '''def ask_user_for_input(self, question: str) -> str:
         """Web-compatible: writes question to pending_question.txt and waits for answer in pending_answer.txt."""
         import os, time
         pending_question_path = os.path.join(os.path.dirname(__file__), "..", "..", "pending_question.txt")
@@ -53,7 +53,7 @@ class FeedbackHandler:
                 return answer
             time.sleep(1)
         self.logger.error("Timed out waiting for user answer.")
-        return ""
+        return ""'''
 
 # Example Usage
 if __name__ == "__main__":
